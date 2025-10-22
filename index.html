@@ -14,7 +14,7 @@
       padding: 0;
       display: flex;
       justify-content: center;
-      align-items: center;
+      align-items: flex-start; /* Alinha no topo em telas pequenas */
       min-height: 100vh;
       overflow: hidden; /* Evita scroll no celular */
     }
@@ -28,13 +28,14 @@
 
     /* Contêiner Principal */
     .container {
-      width: 95vw;
+      width: 100vw; /* Ocupa a largura total */
       max-width: 1000px;
-      margin: 20px auto;
+      min-height: 100vh; /* Ocupa a altura total */
+      margin: 0;
+      padding: 10px; /* Padding menor para mobile */
       background-color: #222;
-      border-radius: 10px;
-      padding: 25px;
       box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+      box-sizing: border-box; /* Inclui padding na largura */
     }
 
     /* Estilos dos Botões e Inputs */
@@ -73,8 +74,6 @@
       box-sizing: border-box;
     }
 
-    /* input[type="color"] REMOVIDO */
-
     label {
       font-size: 1rem;
       margin-right: 10px;
@@ -110,10 +109,13 @@
       display: flex;
       flex-direction: column;
       align-items: center;
+      width: 100%; /* Ocupa espaço disponível */
+      max-width: 600px; /* Limite máximo */
     }
     
     #game-canvas-container {
       position: relative; /* Contexto para a notificação */
+      width: 100%; /* Garante que o container se ajuste */
     }
 
     canvas {
@@ -121,12 +123,17 @@
       border: 4px solid #FFF;
       border-radius: 5px;
       box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
-      width: 600px; /* 15 * 40 */
-      height: 520px; /* 13 * 40 */
+      
+      /* --- MUDANÇA PRINCIPAL PARA RESPONSIVIDADE --- */
+      width: 100%; /* Canvas fluido */
+      max-width: 600px; /* Limite máximo */
+      height: auto; /* Mantém a proporção (aspect ratio) */
+      display: block;
     }
 
     #game-sidebar {
-      width: 200px;
+      width: 200px; /* Largura fixa no desktop */
+      min-width: 200px; /* Evita encolher */
       background-color: #333;
       padding: 15px;
       border-radius: 8px;
@@ -142,9 +149,9 @@
       transform: translate(-50%, -50%);
       background-color: rgba(0, 0, 0, 0.85);
       color: #FFF;
-      padding: 30px;
+      padding: 20px;
       border-radius: 10px;
-      font-size: 1.25rem;
+      font-size: 1.1rem; /* Um pouco menor no mobile */
       font-weight: bold;
       text-align: center;
       z-index: 100;
@@ -153,6 +160,8 @@
       display: none; /* Começa escondida */
       pointer-events: none; /* Não bloquear cliques no canvas */
       animation: fadeInOut 3s ease-in-out forwards;
+      width: 80%;
+      box-sizing: border-box;
     }
 
     @keyframes fadeInOut {
@@ -269,34 +278,38 @@
     /* D-Pad (Esquerda) */
     #touch-dpad {
       position: fixed;
-      bottom: 30px;
-      left: 30px;
-      width: 150px;
-      height: 150px;
+      bottom: 20px; /* Ajuste */
+      left: 10px; /* Ajuste */
+      width: 135px; /* Menor */
+      height: 135px; /* Menor */
       display: none; /* Começa escondido */
       z-index: 100;
+      transform: scale(0.95); /* Um pouco menor */
+      transform-origin: bottom left;
     }
     
     /* Botão de Ação (Direita) */
     #touch-action-button {
       position: fixed;
-      bottom: 40px;
-      right: 40px;
-      width: 120px;
-      height: 120px;
+      bottom: 25px; /* Ajuste */
+      right: 15px; /* Ajuste */
+      width: 110px; /* Menor */
+      height: 110px; /* Menor */
       display: none; /* Começa escondido */
       z-index: 100;
+      transform: scale(0.95);
+      transform-origin: bottom right;
     }
     
     .touch-button {
       position: absolute;
-      width: 60px;
-      height: 60px;
+      width: 50px; /* Menor */
+      height: 50px; /* Menor */
       background-color: rgba(255, 255, 255, 0.3);
       border-radius: 10px;
       border: 2px solid rgba(255, 255, 255, 0.5);
       color: white;
-      font-size: 2rem;
+      font-size: 1.5rem; /* Menor */
       display: flex;
       justify-content: center;
       align-items: center;
@@ -307,24 +320,54 @@
       background-color: rgba(255, 255, 255, 0.6);
     }
     
-    /* Posições do D-Pad */
-    #touch-up { top: 0; left: 45px; }
-    #touch-left { top: 45px; left: 0; }
-    #touch-down { top: 90px; left: 45px; }
-    #touch-right { top: 45px; right: 0; }
+    /* Posições do D-Pad (Ajustadas para 135px) */
+    #touch-up { top: 0; left: 42.5px; }
+    #touch-left { top: 42.5px; left: 0; }
+    #touch-down { top: 85px; left: 42.5px; }
+    #touch-right { top: 42.5px; right: 0; }
     
-    /* Posição do Botão de Bomba */
+    /* Posição do Botão de Bomba (Ajustado para 110px) */
     #touch-bomb {
-      width: 120px;
-      height: 120px;
+      width: 110px;
+      height: 110px;
       border-radius: 50%; /* Botão redondo */
-      font-size: 3rem;
+      font-size: 2.5rem; /* Menor */
       background-color: rgba(255, 65, 54, 0.4); /* Vermelho */
       border-color: rgba(255, 65, 54, 0.7);
     }
     
     #touch-bomb:active {
        background-color: rgba(255, 65, 54, 0.7);
+    }
+    
+    
+    /* --- MEDIA QUERY PARA RESPONSIVIDADE --- */
+    @media (max-width: 850px) { /* Breakpoint (600 + 200 + 20) */
+      
+      .container {
+        padding: 10px; /* Menos padding */
+      }
+    
+      #screen-game {
+        flex-direction: column; /* Joga a sidebar para baixo */
+        align-items: center; /* Centraliza */
+      }
+      
+      #game-area {
+        width: 100%;
+        max-width: 100%; /* Ocupa 100% */
+      }
+      
+      #game-sidebar {
+        width: 100%; /* Ocupa 100% da largura */
+        max-width: 600px; /* Limita ao tamanho do canvas */
+        margin-top: 15px; /* Espaço entre o jogo e o placar */
+      }
+    }
+    
+    @media (max-width: 400px) {
+        h1 { font-size: 1.5rem; }
+        button { padding: 12px 15px; font-size: 0.9rem; }
     }
 
   </style>
@@ -341,11 +384,6 @@
         <label for="player-name">Seu Nome:</label>
         <input type="text" id="player-name" value="Jogador">
       </div>
-      
-      <!-- <div>
-        <label>Cor:</label>
-        <input type="color" id="player-color" value="#FF4136">
-      </div> -->
       
        <div>
         <label for="player-emoji">Personagem:</label>
@@ -399,6 +437,7 @@
       <!-- Área principal do Jogo (Canvas e Notificação) -->
       <div id="game-area">
         <div id="game-canvas-container">
+          <!-- O canvas interno ainda é 600x520, mas o CSS o redimensiona -->
           <canvas id="game-canvas" width="600" height="520"></canvas>
           <div id="game-notification">Mensagem!</div>
         </div>
@@ -699,14 +738,20 @@
       };
 
       socket.onclose = () => {
-        statusEl.textContent = 'Desconectado do servidor.';
+        // MUDANÇA: Verifica se a conexão foi estabelecida antes
+        if (statusEl.textContent === 'Conectando...') {
+           statusEl.textContent = 'Falha ao conectar. Verifique o servidor.';
+        } else {
+           statusEl.textContent = 'Desconectado do servidor.';
+        }
         isGameActive = false;
         showScreen('home');
       };
 
       socket.onerror = (err) => {
         console.error('Erro no WebSocket:', err);
-        statusEl.textContent = 'Erro de conexão.';
+        // MUDANÇA: Mensagem de erro mais clara
+        statusEl.textContent = 'Erro de conexão. O servidor (server.js) pode estar offline ou travado.';
       };
     }
 
