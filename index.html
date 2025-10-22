@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bomberman Multiplayer</title>
+  <style>
+    /* Estilos Globais */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #333;
+      color: #FFF;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      overflow: hidden; /* Evita scroll no celular */
+    }
+
+    h1 {
+      text-shadow: 1px 1px #000;
+      font-size: 2rem;
+      color: #FFDC00;
+      margin-bottom: 20px;
+    }
+
+    /* Contêiner Principal */
+    .container {
+      width: 95vw;
+      max-width: 1000px;
+      margin: 20px auto;
+      background-color: #222;
+      border-radius: 10px;
+      padding: 25px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Estilos dos Botões e Inputs */
+    button {
+      background-color: #0074D9;
+      color: #FFF;
+      border: 2px solid #FFF;
+      padding: 15px 20px;
+      cursor: pointer;
+      font-size: 1rem;
+      border-radius: 5px;
+      transition: background-color 0.2s;
+      text-shadow: 1px 1px #000;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+    
+    button:disabled {
+      background-color: #555;
+      cursor: not-allowed;
+    }
+
+    input[type="text"],
+    select {
+      padding: 10px;
+      font-size: 1rem;
+      border: 2px solid #FFF;
+      background-color: #444;
+      color: #FFF;
+      border-radius: 5px;
+      margin: 5px 0 15px 0;
+      width: calc(100% - 24px); /* Ajuste para padding e borda */
+      box-sizing: border-box;
+    }
+
+    /* input[type="color"] REMOVIDO */
+
+    label {
+      font-size: 1rem;
+      margin-right: 10px;
+      vertical-align: middle;
+    }
+
+    /* Telas (Home, Lobby, Jogo) */
+    .screen {
+      display: none; /* Começam escondidas */
+      width: 100%;
+      animation: fadeIn 0.5s;
+    }
+
+    #screen-home, #screen-lobby {
+      text-align: center;
+    }
+
+    #screen-game {
+      display: none;
+      flex-direction: row;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 20px;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* Tela de Jogo - Layout */
+    #game-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    #game-canvas-container {
+      position: relative; /* Contexto para a notificação */
+    }
+
+    canvas {
+      background-color: #111; /* Fundo do jogo */
+      border: 4px solid #FFF;
+      border-radius: 5px;
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+      width: 600px; /* 15 * 40 */
+      height: 520px; /* 13 * 40 */
+    }
+
+    #game-sidebar {
+      width: 200px;
+      background-color: #333;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+      box-sizing: border-box;
+    }
+    
+    /* Notificação sobre o Jogo */
+    #game-notification {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: rgba(0, 0, 0, 0.85);
+      color: #FFF;
+      padding: 30px;
+      border-radius: 10px;
+      font-size: 1.25rem;
+      font-weight: bold;
+      text-align: center;
+      z-index: 100;
+      border: 2px solid #FFDC00;
+      text-shadow: 1px 1px #000;
+      display: none; /* Começa escondida */
+      pointer-events: none; /* Não bloquear cliques no canvas */
+      animation: fadeInOut 3s ease-in-out forwards;
+    }
+
+    @keyframes fadeInOut {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+      20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+    }
+
+    #status {
+      font-size: 0.9rem;
+      margin-top: 10px;
+      color: #AAA;
+      height: 20px;
+    }
+    
+    #btn-back-to-lobby {
+      margin-top: 15px;
+      width: 100%;
+      background-color: #FF4136;
+      display: none; /* Começa escondido */
+    }
+
+    /* Tela de Lobby */
+    #lobby-info {
+      background-color: #333;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    
+    #room-code-display {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #FFDC00;
+      background-color: #111;
+      padding: 10px;
+      border-radius: 5px;
+      margin: 10px 0;
+      display: inline-block;
+    }
+    
+    #player-list-container {
+      text-align: left;
+      max-width: 400px;
+      margin: 0 auto 20px auto;
+    }
+    
+    .player-lobby-item {
+      font-size: 1rem;
+      padding: 10px;
+      border-bottom: 1px solid #555;
+    }
+    
+    #host-panel {
+      margin-top: 20px;
+      background-color: #444;
+      padding: 15px;
+      border-radius: 8px;
+    }
+
+    /* Placar (Sidebar) */
+    .scoreboard-player {
+      background-color: #444;
+      border-radius: 5px;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-left: 8px solid; /* A cor do jogador vai aqui */
+      transition: opacity 0.3s, background-color 0.3s;
+    }
+    
+    .scoreboard-player.dead {
+      background-color: #333;
+      opacity: 0.5;
+    }
+    
+    .player-name {
+      font-size: 1rem;
+      font-weight: bold;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .player-score {
+      font-size: 1.1rem;
+      float: right;
+      font-weight: bold;
+    }
+
+    .player-stats {
+      font-size: 0.9rem;
+      margin-top: 5px;
+      color: #CCC;
+    }
+    
+    /* Controles de Toque (NOVO) */
+    #touch-controls-panel {
+      margin-top: 15px;
+      background-color: #444;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #touch-controls-panel input {
+      margin-left: 10px;
+      vertical-align: middle;
+    }
+    
+    /* D-Pad (Esquerda) */
+    #touch-dpad {
+      position: fixed;
+      bottom: 30px;
+      left: 30px;
+      width: 150px;
+      height: 150px;
+      display: none; /* Começa escondido */
+      z-index: 100;
+    }
+    
+    /* Botão de Ação (Direita) */
+    #touch-action-button {
+      position: fixed;
+      bottom: 40px;
+      right: 40px;
+      width: 120px;
+      height: 120px;
+      display: none; /* Começa escondido */
+      z-index: 100;
+    }
+    
+    .touch-button {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      background-color: rgba(255, 255, 255, 0.3);
+      border-radius: 10px;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      color: white;
+      font-size: 2rem;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      user-select: none; /* Impede seleção de texto */
+    }
+    
+    .touch-button:active {
+      background-color: rgba(255, 255, 255, 0.6);
+    }
+    
+    /* Posições do D-Pad */
+    #touch-up { top: 0; left: 45px; }
+    #touch-left { top: 45px; left: 0; }
+    #touch-down { top: 90px; left: 45px; }
+    #touch-right { top: 45px; right: 0; }
+    
+    /* Posição do Botão de Bomba */
+    #touch-bomb {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%; /* Botão redondo */
+      font-size: 3rem;
+      background-color: rgba(255, 65, 54, 0.4); /* Vermelho */
+      border-color: rgba(255, 65, 54, 0.7);
+    }
+    
+    #touch-bomb:active {
+       background-color: rgba(255, 65, 54, 0.7);
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- Tela 1: Home (Criar/Entrar na Sala) -->
+    <div id="screen-home" class="screen" style="display: block;">
+      <h1>Bomberman</h1>
+      
+      <div>
+        <label for="player-name">Seu Nome:</label>
+        <input type="text" id="player-name" value="Jogador">
+      </div>
+      
+      <!-- <div>
+        <label>Cor:</label>
+        <input type="color" id="player-color" value="#FF4136">
+      </div> -->
+      
+       <div>
+        <label for="player-emoji">Personagem:</label>
+        <select id="player-emoji">
+          <option value="😀">😀 Rosto</option>
+          <option value="😎">😎 Óculos</option>
+          <option value="🤠">🤠 Cowboy</option>
+          <option value="👽">👽 Alien</option>
+          <option value="👻">👻 Fantasma</option>
+          <option value="🎃">🎃 Abóbora</option>
+          <option value="🤖">🤖 Robô</option>
+          <option value="😺">😺 Gato</option>
+          <option value="🐼">🐼 Panda</option>
+          <option value="🐸">🐸 Sapo</option>
+        </select>
+      </div>
+
+      <button id="btn-create-room" style="margin-top: 20px;">Criar Sala</button>
+      
+      <hr style="border-color: #555; margin: 30px 0;">
+      
+      <div>
+        <label for="room-code">Código da Sala:</label>
+        <input type="text" id="room-code" maxlength="4">
+      </div>
+      <button id="btn-join-room">Entrar na Sala</button>
+    </div>
+
+    <!-- Tela 2: Lobby (Espera) -->
+    <div id="screen-lobby" class="screen">
+      <h1>Lobby</h1>
+      <div id="lobby-info">
+        <span>Código da Sala:</span>
+        <div id="room-code-display">ABCD</div>
+      </div>
+      
+      <h2>Jogadores:</h2>
+      <div id="player-list-container">
+        <!-- Jogadores serão inseridos aqui pelo JS -->
+      </div>
+      
+      <div id="host-panel" style="display: none;">
+        <h3>Painel do Host</h3>
+        <button id="btn-add-bot">Adicionar Bot</button>
+        <button id="btn-start-game" style="background-color: #2ECC40;">Iniciar Jogo</button>
+      </div>
+    </div>
+
+    <!-- Tela 3: Jogo (Canvas + Placar) -->
+    <div id="screen-game" class="screen">
+      <!-- Área principal do Jogo (Canvas e Notificação) -->
+      <div id="game-area">
+        <div id="game-canvas-container">
+          <canvas id="game-canvas" width="600" height="520"></canvas>
+          <div id="game-notification">Mensagem!</div>
+        </div>
+        <div id="status">Conectando...</div>
+      </div>
+      
+      <!-- Sidebar (Placar e Controles de Toque) -->
+      <div id="game-sidebar">
+        <div id="scoreboard">
+          <!-- Placar será inserido aqui pelo JS -->
+        </div>
+        
+        <!-- Painel de Controles de Toque (NOVO) -->
+        <div id="touch-controls-panel">
+          <label for="toggle-touch-controls">Controles de Toque:</label>
+          <input type="checkbox" id="toggle-touch-controls">
+        </div>
+        
+        <button id="btn-back-to-lobby">Voltar ao Lobby</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controles de Toque (Escondidos) -->
+  <div id="touch-dpad">
+    <div id="touch-up" class="touch-button">▲</div>
+    <div id="touch-left" class="touch-button">◄</div>
+    <div id="touch-down" class="touch-button">▼</div>
+    <div id="touch-right" class="touch-button">►</div>
+  </div>
+  <div id="touch-action-button">
+    <div id="touch-bomb" class="touch-button">💣</div>
+  </div>
+
+
+  <script>
+    // --- Configurações do Cliente ---
+    const GRID_SIZE = 40;
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Elementos da UI
+    const screens = {
+      home: document.getElementById('screen-home'),
+      lobby: document.getElementById('screen-lobby'),
+      game: document.getElementById('screen-game'),
+    };
+    const statusEl = document.getElementById('status');
+    const notificationEl = document.getElementById('game-notification');
+    const scoreboardEl = document.getElementById('scoreboard');
+    const btnBackToLobby = document.getElementById('btn-back-to-lobby');
+    
+    // Controles de Toque (NOVOS)
+    const toggleTouchControls = document.getElementById('toggle-touch-controls');
+    const touchDpad = document.getElementById('touch-dpad');
+    const touchActionButton = document.getElementById('touch-action-button');
+
+    // Estado local do jogo
+    let ws;
+    let localPlayerId = null;
+    let localRoomCode = null;
+    let localHostId = null; // <-- Variável para salvar o Host ID
+    let isGameActive = false;
+    let textures = {};
+    let texturesLoaded = false;
+    let lastNotificationTimer = null;
+    let moveInterval = null; // <-- Para movimento contínuo
+    
+    // Estado local do mundo do jogo
+    let localGameState = {
+      players: {},
+      gameMap: [],
+      bombs: [],
+      powerUps: [],
+      explosions: []
+    };
+    
+    // --- Carregamento de Texturas ---
+    
+    // URLs das texturas (Substitua pelos seus links)
+    const textureSources = {
+      floor: 'https://placehold.co/40x40/8f8f8f/8f8f8f?text=.',
+      solidWall: 'https://placehold.co/40x40/4a4a4a/4a4a4a?text=.',
+      softWall: 'https://placehold.co/40x40/a0522d/a0522d?text=.',
+      bomb: 'https://placehold.co/40x40/111111/FFFFFF?text=B',
+      explosion: 'https://placehold.co/40x40/FFA500/FFA500?text=.'
+    };
+
+    function preloadTextures() {
+      let promises = [];
+      for (const key in textureSources) {
+        promises.push(new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+            textures[key] = img;
+            resolve();
+          };
+          img.onerror = () => reject(new Error(`Falha ao carregar ${key}`));
+          img.src = textureSources[key];
+        }));
+      }
+      
+      // Quando todas as imagens carregarem, inicia o jogo
+      Promise.all(promises)
+        .then(() => {
+          console.log('Texturas carregadas.');
+          texturesLoaded = true;
+          connectWebSocket(); // Conecta só depois que as texturas carregarem
+        })
+        .catch(err => console.error(err));
+    }
+
+    // --- Conexão WebSocket ---
+
+    function connectWebSocket() {
+      // Determina o host do WebSocket
+      let host = window.location.host;
+      if (!host) {
+        console.warn("Host não encontrado. Usando 'localhost:3000' como padrão.");
+        host = 'localhost:3000';
+      }
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+      const wsUrl = wsProtocol + host;
+
+      try {
+        ws = new WebSocket(wsUrl);
+        setupWebsocketListeners(ws);
+      } catch (error) {
+        console.error('Falha ao conectar ao WebSocket:', error);
+        statusEl.textContent = 'Erro de conexão.';
+      }
+    }
+
+    function setupWebsocketListeners(socket) {
+      socket.onopen = () => {
+        statusEl.textContent = 'Conectado. Pronto para criar ou entrar na sala.';
+      };
+
+      socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        switch (data.type) {
+          // --- Handlers de Lobby ---
+          case 'room_created':
+          case 'room_joined':
+            localPlayerId = data.playerId;
+            localRoomCode = data.roomCode;
+            localHostId = data.hostId; // <-- SALVA O HOST ID
+            updateLobby(data.roomCode, data.hostId, data.players);
+            showScreen('lobby');
+            break;
+          
+          case 'lobby_update':
+            if (data.hostId) {
+              localHostId = data.hostId; // Atualiza o host se for enviado (ex: host antigo saiu)
+            }
+            // Usa o hostId local salvo para garantir que o painel não suma
+            updateLobby(localRoomCode, localHostId, data.players);
+            break;
+            
+          // --- Handlers de Início/Fim de Jogo ---
+          case 'game_start':
+            // CORREÇÃO: Não sobrescrever o objeto, mas preenchê-lo
+            localGameState.players = data.initialState.players;
+            localGameState.gameMap = data.initialState.gameMap;
+            localGameState.bombs = data.initialState.bombs || [];
+            localGameState.powerUps = data.initialState.powerUps || [];
+            localGameState.explosions = []; // Limpa explosões
+            
+            updateScoreboard();
+            isGameActive = true;
+            btnBackToLobby.style.display = 'none';
+            showScreen('game');
+            requestAnimationFrame(gameLoop); // Inicia o loop de renderização
+            showGameNotification("O Jogo Começou!");
+            break;
+
+          case 'round_start':
+            // Reseta o estado local com os dados do servidor
+            localGameState.gameMap = data.newState.gameMap;
+            localGameState.players = data.newState.players;
+            localGameState.bombs = [];
+            localGameState.powerUps = [];
+            localGameState.explosions = [];
+            
+            updateScoreboard(); // Atualiza o placar (remove 'morto')
+            isGameActive = true;
+            btnBackToLobby.style.display = 'none';
+            requestAnimationFrame(gameLoop); // Reinicia o loop
+            showGameNotification("Nova Rodada!");
+            break;
+            
+          case 'round_over':
+            isGameActive = false; // Pausa o jogo
+            showGameNotification(`${data.winnerName} venceu a rodada!`);
+            break;
+
+          case 'game_over':
+            isGameActive = false; // Para o jogo
+            showGameNotification(`FIM DE JOGO! ${data.winnerName} é o campeão!`);
+            btnBackToLobby.style.display = 'block'; // Mostra o botão de voltar
+            break;
+            
+          case 'sudden_death': // <-- NOVO EVENTO
+            showGameNotification("Morte Súbita! Bots com poder máximo!");
+            break;
+            
+          case 'player_left':
+            delete localGameState.players[data.playerId];
+            if (data.newHostId) {
+              localHostId = data.newHostId; // Salva o novo host
+              updateLobby(localRoomCode, data.newHostId, localGameState.players);
+            }
+            updateScoreboard();
+            break;
+
+          // --- Handlers de Jogo ---
+          case 'player_moved':
+            if (localGameState.players[data.playerId]) {
+              localGameState.players[data.playerId].x = data.x;
+              localGameState.players[data.playerId].y = data.y;
+            }
+            break;
+            
+          case 'bomb_placed':
+            localGameState.bombs.push(data.bomb);
+            break;
+            
+          case 'bomb_exploded':
+            // Remove a bomba
+            localGameState.bombs = localGameState.bombs.filter(b => b.id !== data.bombId);
+            // Adiciona as explosões
+            data.explosionTiles.forEach(tile => {
+              const explosionId = `${tile.x}-${tile.y}-${Date.now()}`;
+              localGameState.explosions.push({ ...tile, id: explosionId });
+              // Timer para remover a explosão da tela
+              setTimeout(() => {
+                localGameState.explosions = localGameState.explosions.filter(e => e.id !== explosionId);
+              }, 500);
+            });
+            break;
+            
+          case 'map_update':
+            data.tiles.forEach(tile => {
+              localGameState.gameMap[tile.y][tile.x] = tile.newType;
+            });
+            break;
+            
+          case 'powerup_spawned':
+            localGameState.powerUps.push(data.powerUp);
+            break;
+            
+          case 'powerup_collected':
+            // Remove o power-up
+            const pUpIndex = localGameState.powerUps.findIndex(p => p.id === data.powerUpId);
+            if (pUpIndex > -1) {
+              const powerUp = localGameState.powerUps[pUpIndex];
+              const player = localGameState.players[data.playerId];
+              
+              // Atualiza o status local do jogador para o placar
+              if (player) {
+                if (powerUp.type === 'bomb-up') player.maxBombs++;
+                if (powerUp.type === 'fire-up') player.bombPower++;
+                if (powerUp.type === 'bomb-pass') player.canPassBombs = true;
+              }
+              
+              localGameState.powerUps.splice(pUpIndex, 1);
+              updateScoreboard(); // Atualiza o placar
+            }
+            break;
+            
+          case 'player_update': // <-- ATUALIZADO
+            if (localGameState.players[data.playerId]) {
+              const player = localGameState.players[data.playerId];
+              // Atualiza apenas os campos que vieram na mensagem
+              if (data.isAlive !== undefined) player.isAlive = data.isAlive;
+              if (data.displayEmoji) player.displayEmoji = data.displayEmoji;
+              if (data.bombPower) player.bombPower = data.bombPower;
+              if (data.maxBombs) player.maxBombs = data.maxBombs;
+              updateScoreboard(); // Atualiza o placar
+            }
+            break;
+            
+          case 'score_update':
+            Object.values(data.players).forEach(p => {
+              if (localGameState.players[p.id]) {
+                localGameState.players[p.id].score = p.score;
+              }
+            });
+            updateScoreboard();
+            break;
+            
+          // --- Outros ---
+          case 'error_message':
+            alert(data.message); // TODO: Substituir por um modal
+            break;
+        }
+      };
+
+      socket.onclose = () => {
+        statusEl.textContent = 'Desconectado do servidor.';
+        isGameActive = false;
+        showScreen('home');
+      };
+
+      socket.onerror = (err) => {
+        console.error('Erro no WebSocket:', err);
+        statusEl.textContent = 'Erro de conexão.';
+      };
+    }
+
+    // --- Renderização (Canvas) ---
+
+    function gameLoop() {
+      if (!isGameActive || !texturesLoaded) {
+        return; // Para o loop se o jogo pausar
+      }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 1. Desenha o Chão (textura base)
+      if (textures.floor) {
+        for (let y = 0; y < localGameState.gameMap.length; y++) {
+          for (let x = 0; x < localGameState.gameMap[y].length; x++) {
+            ctx.drawImage(textures.floor, x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
+          }
+        }
+      }
+
+      // 2. Desenha Paredes (Sólidas e Destrutíveis)
+      for (let y = 0; y < localGameState.gameMap.length; y++) {
+        for (let x = 0; x < localGameState.gameMap[y].length; x++) {
+          const tileType = localGameState.gameMap[y][x];
+          if (tileType === 1 && textures.solidWall) { // Sólida
+            ctx.drawImage(textures.solidWall, x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
+          } else if (tileType === 2 && textures.softWall) { // Destrutível
+            ctx.drawImage(textures.softWall, x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
+          }
+        }
+      }
+      
+      // 3. Desenha Power-ups
+      localGameState.powerUps.forEach(p => {
+        ctx.font = `${GRID_SIZE * 0.6}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        let emoji = '❓';
+        if (p.type === 'bomb-up') emoji = '💣';
+        if (p.type === 'fire-up') emoji = '🔥';
+        if (p.type === 'bomb-pass') emoji = '👟';
+        ctx.fillText(emoji, (p.x * GRID_SIZE) + (GRID_SIZE / 2), (p.y * GRID_SIZE) + (GRID_SIZE / 2));
+      });
+
+      // 4. Desenha Bombas
+      if (textures.bomb) {
+        localGameState.bombs.forEach(bomb => {
+          ctx.drawImage(textures.bomb, bomb.x * GRID_SIZE, bomb.y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
+        });
+      }
+      
+      // 5. Desenha Explosões
+      if (textures.explosion) {
+        localGameState.explosions.forEach(exp => {
+          ctx.drawImage(textures.explosion, exp.x * GRID_SIZE, exp.y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
+        });
+      }
+
+      // 6. Desenha Jogadores
+      Object.values(localGameState.players).forEach(player => {
+        if (player.isAlive) {
+          const x = player.x * GRID_SIZE;
+          const y = player.y * GRID_SIZE;
+          const halfGrid = GRID_SIZE / 2;
+          
+          // Desenha o círculo da cor do jogador
+          ctx.fillStyle = player.color;
+          ctx.beginPath();
+          ctx.arc(x + halfGrid, y + halfGrid, halfGrid * 0.9, 0, 2 * Math.PI);
+          ctx.fill();
+          
+          // Desenha o emoji do jogador
+          ctx.font = `${GRID_SIZE * 0.7}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(player.displayEmoji, x + halfGrid, y + (halfGrid * 1.1)); // Ajuste fino vertical
+        } else {
+          // Se morto, desenha o emoji de caveira (lógica já tratada pelo displayEmoji)
+           const x = player.x * GRID_SIZE;
+           const y = player.y * GRID_SIZE;
+           const halfGrid = GRID_SIZE / 2;
+           ctx.globalAlpha = 0.7; // Leve transparência
+           ctx.font = `${GRID_SIZE * 0.7}px sans-serif`;
+           ctx.textAlign = 'center';
+           ctx.textBaseline = 'middle';
+           ctx.fillText(player.displayEmoji, x + halfGrid, y + (halfGrid * 1.1));
+           ctx.globalAlpha = 1.0;
+        }
+      });
+
+      requestAnimationFrame(gameLoop);
+    }
+    
+    // --- Funções de UI ---
+
+    function showScreen(screenName) {
+      Object.values(screens).forEach(screen => screen.style.display = 'none');
+      screens[screenName].style.display = (screenName === 'game') ? 'flex' : 'block';
+    }
+
+    function updateLobby(roomCode, hostId, players) {
+      document.getElementById('room-code-display').textContent = roomCode;
+      
+      const listEl = document.getElementById('player-list-container');
+      listEl.innerHTML = '';
+      Object.values(players).forEach(p => {
+        const item = document.createElement('div');
+        item.className = 'player-lobby-item';
+        
+        // Estiliza a cor
+        const colorBox = `<span style="border-left: 6px solid ${p.color}; padding-left: 8px; font-size: 1.5rem;">${p.displayEmoji}</span>`;
+        
+        let hostTag = (p.id === hostId) ? ' (Host) 👑' : '';
+        item.innerHTML = `${colorBox} ${p.name} ${hostTag}`;
+        listEl.appendChild(item);
+      });
+      
+      // Mostra o painel do host
+      document.getElementById('host-panel').style.display = (localPlayerId === hostId) ? 'block' : 'none';
+      
+      // Habilita/Desabilita botões
+      document.getElementById('btn-add-bot').disabled = Object.keys(players).length >= 5;
+      document.getElementById('btn-start-game').disabled = Object.keys(players).length < 2;
+    }
+
+    function updateScoreboard() {
+      if (!localGameState || !localGameState.players) return; // Checagem de segurança
+      
+      scoreboardEl.innerHTML = ''; // Limpa o placar
+      
+      // Ordena por score
+      const sortedPlayers = Object.values(localGameState.players).sort((a, b) => b.score - a.score);
+      
+      sortedPlayers.forEach(p => {
+        const item = document.createElement('div');
+        item.className = 'scoreboard-player';
+        item.style.borderColor = p.color;
+        
+        if (!p.isAlive) {
+          item.classList.add('dead');
+        }
+        
+        item.innerHTML = `
+          <div class="player-score">${p.displayEmoji} ${p.score}</div>
+          <div class="player-name">${p.name}</div>
+          <div class="player-stats">
+            💣 ${p.maxBombs} &nbsp;&nbsp; 🔥 ${p.bombPower}
+          </div>
+        `;
+        scoreboardEl.appendChild(item);
+      });
+    }
+
+    function showGameNotification(message) {
+      // Limpa timer anterior se houver
+      if (lastNotificationTimer) {
+        clearTimeout(lastNotificationTimer);
+      }
+      
+      notificationEl.textContent = message;
+      notificationEl.style.display = 'block';
+      notificationEl.style.animation = 'none'; // Reseta a animação
+      
+      // Força o navegador a refazer a animação
+      void notificationEl.offsetWidth; 
+      
+      notificationEl.style.animation = 'fadeInOut 3s ease-in-out forwards';
+      
+      // Define um timer para esconder o elemento (caso a animação falhe)
+      lastNotificationTimer = setTimeout(() => {
+        notificationEl.style.display = 'none';
+      }, 3000);
+    }
+    
+    // --- Handlers de Input (Teclado) ---
+
+    window.addEventListener('keydown', (e) => {
+      if (!isGameActive) return;
+
+      switch (e.key) {
+        case 'ArrowUp':
+        case 'w':
+          sendMove('up');
+          break;
+        case 'ArrowDown':
+        case 's':
+          sendMove('down');
+          break;
+        case 'ArrowLeft':
+        case 'a':
+          sendMove('left');
+          break;
+        case 'ArrowRight':
+        case 'd':
+          sendMove('right');
+          break;
+        case ' ': // Barra de espaço
+          e.preventDefault(); // Impede a página de rolar
+          placeBomb();
+          break;
+      }
+    });
+
+    // --- Handlers de Input (Botões da UI) ---
+
+    // Tela Home
+    document.getElementById('btn-create-room').onclick = () => {
+      ws.send(JSON.stringify({
+        type: 'create_room',
+        name: document.getElementById('player-name').value,
+        // Cor removida, será automática
+        emoji: document.getElementById('player-emoji').value
+      }));
+    };
+    
+    document.getElementById('btn-join-room').onclick = () => {
+      const code = document.getElementById('room-code').value.toUpperCase();
+      if (code.length === 4) {
+        ws.send(JSON.stringify({
+          type: 'join_room',
+          roomCode: code,
+          name: document.getElementById('player-name').value,
+          // Cor removida, será automática
+          emoji: document.getElementById('player-emoji').value
+        }));
+      } else {
+        alert('Código da sala deve ter 4 caracteres.');
+      }
+    };
+    
+    // Tela Lobby
+    document.getElementById('btn-add-bot').onclick = () => ws.send(JSON.stringify({ type: 'add_bot' }));
+    document.getElementById('btn-start-game').onclick = () => ws.send(JSON.stringify({ type: 'start_game' }));
+
+    // Tela Jogo
+    btnBackToLobby.onclick = () => {
+      // Apenas recarrega a página. O onclose do websocket vai cuidar da desconexão.
+      window.location.reload();
+    };
+    
+    // --- Lógica de Ação do Jogador ---
+
+    function sendMove(direction) {
+      if (!isGameActive) return;
+      ws.send(JSON.stringify({ type: 'move', direction: direction }));
+    }
+
+    function placeBomb() {
+      if (!isGameActive) return;
+      ws.send(JSON.stringify({ type: 'place_bomb' }));
+    }
+    
+    // --- Handlers de Input (Controles de Toque - ATUALIZADOS) ---
+    
+    toggleTouchControls.addEventListener('change', (e) => {
+      const show = e.target.checked;
+      touchDpad.style.display = show ? 'block' : 'none';
+      touchActionButton.style.display = show ? 'block' : 'none';
+    });
+    
+    // Lógica de Movimento Contínuo
+    function handleMovePress(direction) {
+      if (moveInterval) clearInterval(moveInterval); // Limpa o movimento anterior
+      sendMove(direction); // Envia o primeiro movimento imediatamente
+      moveInterval = setInterval(() => {
+        sendMove(direction); // Continua enviando a cada 150ms
+      }, 150);
+    }
+    
+    function handleMoveRelease() {
+      if (moveInterval) clearInterval(moveInterval); // Para o movimento
+      moveInterval = null;
+    }
+    
+    // Mapeia os botões de D-Pad
+    const dpadButtons = [
+      { id: 'touch-up', dir: 'up' },
+      { id: 'touch-down', dir: 'down' },
+      { id: 'touch-left', dir: 'left' },
+      { id: 'touch-right', dir: 'right' }
+    ];
+    
+    dpadButtons.forEach(btn => {
+      const element = document.getElementById(btn.id);
+      element.addEventListener('mousedown', (e) => { e.preventDefault(); handleMovePress(btn.dir); });
+      element.addEventListener('touchstart', (e) => { e.preventDefault(); handleMovePress(btn.dir); }, { passive: false });
+    });
+
+    // Listeners para "soltar" o botão (funcionam na tela inteira)
+    window.addEventListener('mouseup', handleMoveRelease);
+    window.addEventListener('touchend', handleMoveRelease);
+
+    // Botão de Bomba (ação única)
+    const bombButton = document.getElementById('touch-bomb');
+    bombButton.addEventListener('mousedown', (e) => { e.preventDefault(); placeBomb(); });
+    bombButton.addEventListener('touchstart', (e) => { e.preventDefault(); placeBomb(); }, { passive: false });
+
+
+    // --- Inicialização ---
+    preloadTextures(); // Inicia o carregamento das texturas
+  </script>
+</body>
+</html>
+

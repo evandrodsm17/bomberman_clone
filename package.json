@@ -1,0 +1,16 @@
+{
+  "name": "bomberman",
+  "version": "1.0.0",
+  "description": "Servidor Node.js para jogo estilo Bomberman",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "author": "Evandro dos Santos Mota",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.19.2",
+    "uuid": "^9.0.1",
+    "ws": "^8.17.1"
+  }
+}
