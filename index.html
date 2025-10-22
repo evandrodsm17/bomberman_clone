@@ -224,6 +224,15 @@
     }
 
     /* Placar (Sidebar) */
+    
+    /* MUDANÇA: Adicionado scroll ao placar */
+    #scoreboard {
+      max-height: 250px; /* Limita a altura */
+      overflow-y: auto; /* Adiciona scroll se necessário */
+      scrollbar-width: thin;
+      scrollbar-color: #888 #444;
+    }
+    
     .scoreboard-player {
       background-color: #444;
       border-radius: 5px;
@@ -1052,7 +1061,20 @@
 
 
     // --- Inicialização ---
-    preloadTextures(); // Inicia o carregamento das texturas
+    function initializeApp() {
+      // Detecta se é um dispositivo de toque (provavelmente mobile)
+      const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+      
+      if (isMobile) {
+        toggleTouchControls.checked = true;
+        // Ativa a lógica do listener para exibir os controles
+        toggleTouchControls.dispatchEvent(new Event('change'));
+      }
+      
+      preloadTextures(); // Inicia o carregamento das texturas
+    }
+    
+    initializeApp();
   </script>
 </body>
 </html>
