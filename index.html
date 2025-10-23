@@ -80,7 +80,7 @@
       vertical-align: middle;
     }
     
-    /* NOVO: Estilo para o toggle na home */
+    /* Estilo para o toggle na home */
     .home-option {
       margin: 15px 0;
       display: flex;
@@ -131,7 +131,7 @@
     }
 
     canvas {
-      background-color: #111; /* Fundo do jogo */
+      /* REMOVIDO background-color: #111; O chão agora é desenhado */
       border: 4px solid #FFF;
       border-radius: 5px;
       box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
@@ -237,7 +237,6 @@
 
     /* Placar (Sidebar) */
     
-    /* MUDANÇA: Adicionado scroll ao placar */
     #scoreboard {
       max-height: 250px; /* Limita a altura */
       overflow-y: auto; /* Adiciona scroll se necessário */
@@ -280,31 +279,26 @@
       color: #CCC;
     }
     
-    /* Controles de Toque (NOVO) */
-    /* REMOVIDO PAINEL DA SIDEBAR
-    #touch-controls-panel { ... } */
-    
-    /* D-Pad (Esquerda) */
+    /* Controles de Toque */
     #touch-dpad {
       position: fixed;
-      bottom: 20px; /* Ajuste */
-      left: 10px; /* Ajuste */
-      width: 135px; /* Menor */
-      height: 135px; /* Menor */
-      display: none; /* Começa escondido */
+      bottom: 20px; 
+      left: 10px; 
+      width: 135px; 
+      height: 135px; 
+      display: none; 
       z-index: 100;
-      transform: scale(0.95); /* Um pouco menor */
+      transform: scale(0.95); 
       transform-origin: bottom left;
     }
     
-    /* Botão de Ação (Direita) */
     #touch-action-button {
       position: fixed;
-      bottom: 25px; /* Ajuste */
-      right: 15px; /* Ajuste */
-      width: 110px; /* Menor */
-      height: 110px; /* Menor */
-      display: none; /* Começa escondido */
+      bottom: 25px; 
+      right: 15px; 
+      width: 110px; 
+      height: 110px; 
+      display: none; 
       z-index: 100;
       transform: scale(0.95);
       transform-origin: bottom right;
@@ -312,36 +306,34 @@
     
     .touch-button {
       position: absolute;
-      width: 50px; /* Menor */
-      height: 50px; /* Menor */
+      width: 50px; 
+      height: 50px; 
       background-color: rgba(255, 255, 255, 0.3);
       border-radius: 10px;
       border: 2px solid rgba(255, 255, 255, 0.5);
       color: white;
-      font-size: 1.5rem; /* Menor */
+      font-size: 1.5rem; 
       display: flex;
       justify-content: center;
       align-items: center;
-      user-select: none; /* Impede seleção de texto */
+      user-select: none; 
     }
     
     .touch-button:active {
       background-color: rgba(255, 255, 255, 0.6);
     }
     
-    /* Posições do D-Pad (Ajustadas para 135px) */
     #touch-up { top: 0; left: 42.5px; }
     #touch-left { top: 42.5px; left: 0; }
     #touch-down { top: 85px; left: 42.5px; }
     #touch-right { top: 42.5px; right: 0; }
     
-    /* Posição do Botão de Bomba (Ajustado para 110px) */
     #touch-bomb {
       width: 110px;
       height: 110px;
-      border-radius: 50%; /* Botão redondo */
-      font-size: 2.5rem; /* Menor */
-      background-color: rgba(255, 65, 54, 0.4); /* Vermelho */
+      border-radius: 50%; 
+      font-size: 2.5rem; 
+      background-color: rgba(255, 65, 54, 0.4); 
       border-color: rgba(255, 65, 54, 0.7);
     }
     
@@ -351,26 +343,26 @@
     
     
     /* --- MEDIA QUERY PARA RESPONSIVIDADE --- */
-    @media (max-width: 850px) { /* Breakpoint (600 + 200 + 20) */
+    @media (max-width: 850px) { /* Breakpoint */
       
       .container {
-        padding: 10px; /* Menos padding */
+        padding: 10px; 
       }
     
       #screen-game {
-        flex-direction: column; /* Joga a sidebar para baixo */
-        align-items: center; /* Centraliza */
+        flex-direction: column; 
+        align-items: center; 
       }
       
       #game-area {
         width: 100%;
-        max-width: 100%; /* Ocupa 100% */
+        max-width: 100%; 
       }
       
       #game-sidebar {
-        width: 100%; /* Ocupa 100% da largura */
-        max-width: 600px; /* Limita ao tamanho do canvas */
-        margin-top: 15px; /* Espaço entre o jogo e o placar */
+        width: 100%; 
+        max-width: 600px; 
+        margin-top: 15px; 
       }
     }
     
@@ -385,8 +377,7 @@
 
   <div class="container">
 
-    <!-- Tela 1: Home (Criar/Entrar na Sala) -->
-    <div id="screen-home" class="screen" style="display: block;">
+    <!-- Tela 1: Home --><div id="screen-home" class="screen" style="display: block;">
       <h1>Bomberman</h1>
       
       <div>
@@ -410,8 +401,7 @@
         </select>
       </div>
       
-      <!-- NOVO: Toggle de Controles movido para cá -->
-      <div class="home-option">
+      <!-- Toggle de Controles --><div class="home-option">
         <label for="toggle-touch-controls">Exibir Controles de Toque:</label>
         <input type="checkbox" id="toggle-touch-controls">
       </div>
@@ -427,8 +417,7 @@
       <button id="btn-join-room">Entrar na Sala</button>
     </div>
 
-    <!-- Tela 2: Lobby (Espera) -->
-    <div id="screen-lobby" class="screen">
+    <!-- Tela 2: Lobby --><div id="screen-lobby" class="screen">
       <h1>Lobby</h1>
       <div id="lobby-info">
         <span>Código da Sala:</span>
@@ -437,8 +426,7 @@
       
       <h2>Jogadores:</h2>
       <div id="player-list-container">
-        <!-- Jogadores serão inseridos aqui pelo JS -->
-      </div>
+        <!-- Jogadores --></div>
       
       <div id="host-panel" style="display: none;">
         <h3>Painel do Host</h3>
@@ -447,34 +435,25 @@
       </div>
     </div>
 
-    <!-- Tela 3: Jogo (Canvas + Placar) -->
-    <div id="screen-game" class="screen">
-      <!-- Área principal do Jogo (Canvas e Notificação) -->
-      <div id="game-area">
+    <!-- Tela 3: Jogo --><div id="screen-game" class="screen">
+      <!-- Área do Jogo --><div id="game-area">
         <div id="game-canvas-container">
-          <!-- O canvas interno ainda é 600x520, mas o CSS o redimensiona -->
           <canvas id="game-canvas" width="600" height="520"></canvas>
           <div id="game-notification">Mensagem!</div>
         </div>
         <div id="status">Conectando...</div>
       </div>
       
-      <!-- Sidebar (Placar e Controles de Toque) -->
-      <div id="game-sidebar">
+      <!-- Sidebar --><div id="game-sidebar">
         <div id="scoreboard">
-          <!-- Placar será inserido aqui pelo JS -->
-        </div>
-        
-        <!-- REMOVIDO PAINEL DA SIDEBAR
-        <div id="touch-controls-panel"> ... </div> -->
+          <!-- Placar --></div>
         
         <button id="btn-back-to-lobby">Voltar ao Lobby</button>
       </div>
     </div>
   </div>
 
-  <!-- Controles de Toque (Escondidos) -->
-  <div id="touch-dpad">
+  <!-- Controles de Toque --><div id="touch-dpad">
     <div id="touch-up" class="touch-button">▲</div>
     <div id="touch-left" class="touch-button">◄</div>
     <div id="touch-down" class="touch-button">▼</div>
@@ -513,7 +492,7 @@
     let localRoomCode = null;
     let localHostId = null; 
     let isGameActive = false;
-    let textures = {};
+    let textures = {}; // MANTIDO para explosão
     let texturesLoaded = false;
     let lastNotificationTimer = null;
     let moveInterval = null; 
@@ -523,42 +502,42 @@
     let localGameState = {
       players: {},
       gameMap: [],
-      bombs: [], // Agora inclui { id, x, y, isSuper }
+      bombs: [], 
       powerUps: [],
       explosions: []
     };
     
-    // --- Carregamento de Texturas ---
+    // --- Carregamento de Texturas (ATUALIZADO) ---
     
-    // URLs das texturas (REMOVIDO textures.bomb)
+    // URLs das texturas (REMOVIDO floor, solidWall, softWall)
     const textureSources = {
-      floor: 'https://placehold.co/40x40/8f8f8f/8f8f8f?text=.',
-      solidWall: 'https://placehold.co/40x40/4a4a4a/4a4a4a?text=.',
-      softWall: 'https://placehold.co/40x40/a0522d/a0522d?text=.',
-      // bomb: '...', // Removido
       explosion: 'https://placehold.co/40x40/FFA500/FFA500?text=.'
     };
 
     function preloadTextures() {
       let promises = [];
-      for (const key in textureSources) {
-        promises.push(new Promise((resolve, reject) => {
-          const img = new Image();
-          img.onload = () => {
-            textures[key] = img;
-            resolve();
-          };
-          img.onerror = () => reject(new Error(`Falha ao carregar ${key}`));
-          img.src = textureSources[key];
-        }));
+      // Apenas a textura de explosão
+      if (textureSources.explosion) {
+          promises.push(new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+              textures['explosion'] = img;
+              resolve();
+            };
+            img.onerror = () => reject(new Error(`Falha ao carregar explosão`));
+            img.src = textureSources.explosion;
+          }));
+      } else {
+          // Se não houver textura de explosão, resolve imediatamente
+          promises.push(Promise.resolve());
       }
       
-      // Quando todas as imagens carregarem, inicia o jogo
+      // Quando todas as imagens carregarem (ou se não houver), inicia
       Promise.all(promises)
         .then(() => {
-          console.log('Texturas carregadas.');
-          texturesLoaded = true;
-          connectWebSocket(); // Conecta só depois que as texturas carregarem
+          console.log('Texturas carregadas (ou puladas).');
+          texturesLoaded = true; // Mesmo que não tenha carregado nada
+          connectWebSocket(); 
         })
         .catch(err => console.error(err));
     }
@@ -566,7 +545,6 @@
     // --- Conexão WebSocket ---
 
     function connectWebSocket() {
-      // Determina o host do WebSocket
       let host = window.location.host;
       if (!host) {
         console.warn("Host não encontrado. Usando 'localhost:3000' como padrão.");
@@ -593,7 +571,7 @@
         const data = JSON.parse(event.data);
         
         switch (data.type) {
-          // --- Handlers de Lobby ---
+          // Handlers de Lobby
           case 'room_created':
           case 'room_joined':
             localPlayerId = data.playerId;
@@ -604,13 +582,11 @@
             break;
           
           case 'lobby_update':
-            if (data.hostId) {
-              localHostId = data.hostId; 
-            }
+            if (data.hostId) localHostId = data.hostId; 
             updateLobby(localRoomCode, localHostId, data.players);
             break;
             
-          // --- Handlers de Início/Fim de Jogo ---
+          // Handlers de Início/Fim de Jogo
           case 'game_start':
             localGameState.players = data.initialState.players;
             localGameState.gameMap = data.initialState.gameMap;
@@ -618,7 +594,6 @@
             localGameState.powerUps = data.initialState.powerUps || [];
             localGameState.explosions = []; 
             
-            // ATUALIZADO: Mostra controles de toque com base na preferência
             if (showTouchControlsPreference) {
               touchDpad.style.display = 'block';
               touchActionButton.style.display = 'block';
@@ -677,7 +652,7 @@
             updateScoreboard();
             break;
 
-          // --- Handlers de Jogo ---
+          // Handlers de Jogo
           case 'player_moved':
             if (localGameState.players[data.playerId]) {
               localGameState.players[data.playerId].x = data.x;
@@ -694,7 +669,6 @@
             break;
             
           case 'bomb_placed':
-             // Armazena a informação isSuper
              localGameState.bombs.push({
                  id: data.bomb.id,
                  x: data.bomb.x,
@@ -729,11 +703,9 @@
             if (pUpIndex > -1) {
               const player = localGameState.players[data.playerId];
               if (player) {
-                  // Atualiza o estado local com os dados enviados pelo servidor
                   player.maxBombs = data.maxBombs;
                   player.bombPower = data.bombPower;
                   player.hasSuperBomb = data.hasSuperBomb;
-                  // Atualiza flags locais (que não vêm do server nesse evento)
                   const pUpType = localGameState.powerUps[pUpIndex].type;
                   if (pUpType === 'bomb-pass') player.canPassBombs = true;
                   if (pUpType === 'wall-pass') player.canPassWalls = true;
@@ -750,22 +722,22 @@
                 showGameNotification(`${localGameState.players[data.playerId].name} pegou uma caveira! (${data.curse})`);
             }
             localGameState.powerUps = localGameState.powerUps.filter(p => p.x !== localGameState.players[data.playerId].x || p.y !== localGameState.players[data.playerId].y);
-            updateScoreboard(); // Mostra ícone de maldição
+            updateScoreboard(); 
             break;
 
-          case 'player_cured': // NOVO
+          case 'player_cured': 
               if (localGameState.players[data.playerId]) {
                   localGameState.players[data.playerId].curse = null;
                   showGameNotification(`${localGameState.players[data.playerId].name} foi curado!`);
               }
-              updateScoreboard(); // Remove ícone de maldição
+              updateScoreboard(); 
               break;
             
           case 'curse_transferred': 
             if (localGameState.players[data.fromId]) localGameState.players[data.fromId].curse = null;
             if (localGameState.players[data.toId]) localGameState.players[data.toId].curse = data.curse;
             showGameNotification(`Maldição passada para ${localGameState.players[data.toId].name}!`);
-            updateScoreboard(); // Atualiza ícones
+            updateScoreboard(); 
             break;
 
           case 'player_update': 
@@ -774,7 +746,7 @@
               if (data.isAlive !== undefined) player.isAlive = data.isAlive;
               if (data.bombPower !== undefined) player.bombPower = data.bombPower;
               if (data.maxBombs !== undefined) player.maxBombs = data.maxBombs;
-              if (data.hasSuperBomb !== undefined) player.hasSuperBomb = data.hasSuperBomb; // Recebe update da super bomba gasta
+              if (data.hasSuperBomb !== undefined) player.hasSuperBomb = data.hasSuperBomb; 
               updateScoreboard(); 
             }
             break;
@@ -788,7 +760,7 @@
             updateScoreboard();
             break;
             
-          // --- Outros ---
+          // Outros
           case 'error_message':
             alert(data.message); 
             break;
@@ -814,35 +786,52 @@
     // --- Renderização (Canvas) ---
 
     function gameLoop() {
-      if (!isGameActive || !texturesLoaded) {
+      if (!isGameActive) { // Não precisa mais checar texturesLoaded aqui
         return; 
       }
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 1. Desenha o Chão (textura base)
-      if (textures.floor) {
-        for (let y = 0; y < localGameState.gameMap.length; y++) {
-          for (let x = 0; x < localGameState.gameMap[y].length; x++) {
-            ctx.drawImage(textures.floor, x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
-          }
-        }
-      }
-
-      // 2. Desenha Paredes (Sólidas e Destrutíveis)
+      // 1. Desenha o Chão e Paredes (ATUALIZADO para CSS-like)
       for (let y = 0; y < localGameState.gameMap.length; y++) {
         for (let x = 0; x < localGameState.gameMap[y].length; x++) {
           const tileType = localGameState.gameMap[y][x];
-          if (tileType === 1 && textures.solidWall) { 
-            ctx.drawImage(textures.solidWall, x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
-          } else if (tileType === 2 && textures.softWall) { 
-            ctx.drawImage(textures.softWall, x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
+          const posX = x * GRID_SIZE;
+          const posY = y * GRID_SIZE;
+
+          if (tileType === 1) { // Sólida
+            ctx.fillStyle = '#444'; // Cinza escuro
+            ctx.fillRect(posX, posY, GRID_SIZE, GRID_SIZE);
+            ctx.strokeStyle = '#222'; // Borda mais escura
+            ctx.lineWidth = 2;
+            ctx.strokeRect(posX + 1, posY + 1, GRID_SIZE - 2, GRID_SIZE - 2); // +1/-2 para borda interna
+          } else if (tileType === 2) { // Destrutível
+            ctx.fillStyle = '#8B4513'; // Marrom
+            ctx.fillRect(posX, posY, GRID_SIZE, GRID_SIZE);
+            ctx.strokeStyle = '#5A2D0C'; // Borda marrom escura
+            ctx.lineWidth = 2;
+            ctx.strokeRect(posX + 1, posY + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+          } else { // Chão (0)
+            ctx.fillStyle = '#666'; // Cinza padrão
+            ctx.fillRect(posX, posY, GRID_SIZE, GRID_SIZE);
+             // Poderia adicionar um padrão sutil aqui se quisesse
           }
         }
       }
       
-      // 3. Desenha Power-ups (ATUALIZADO com Super Bomba)
+      // 2. Desenha Power-ups
       localGameState.powerUps.forEach(p => {
+        const x = p.x * GRID_SIZE;
+        const y = p.y * GRID_SIZE;
+
+        // Desenha a caixa de fundo
+        ctx.fillStyle = 'rgba(0, 100, 255, 0.3)'; 
+        ctx.fillRect(x + 2, y + 2, GRID_SIZE - 4, GRID_SIZE - 4);
+        ctx.strokeStyle = '#FFFFFF'; 
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 2, y + 2, GRID_SIZE - 4, GRID_SIZE - 4);
+
+        // Desenha o emoji do power-up
         ctx.font = `${GRID_SIZE * 0.6}px sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -853,59 +842,65 @@
         if (p.type === 'wall-pass') emoji = '👻'; 
         if (p.type === 'kick-bomb') emoji = '👟'; 
         if (p.type === 'skull') emoji = '💀';     
-        if (p.type === 'super-bomb') emoji = '💥'; // NOVO EMOJI
-        ctx.fillText(emoji, (p.x * GRID_SIZE) + (GRID_SIZE / 2), (p.y * GRID_SIZE) + (GRID_SIZE / 2));
+        if (p.type === 'super-bomb') emoji = '💥'; 
+        ctx.fillText(emoji, x + (GRID_SIZE / 2), y + (GRID_SIZE / 2));
       });
 
-      // 4. Desenha Bombas (ATUALIZADO para círculos)
+      // 3. Desenha Bombas
       localGameState.bombs.forEach(bomb => {
         const x = bomb.x * GRID_SIZE;
         const y = bomb.y * GRID_SIZE;
         const halfGrid = GRID_SIZE / 2;
         const radius = halfGrid * 0.8;
 
-        // Desenha o círculo
-        ctx.fillStyle = bomb.isSuper ? '#FF4136' : '#111111'; // Vermelho se super, preto se normal
+        // Círculo
+        ctx.fillStyle = bomb.isSuper ? '#FF4136' : '#111111'; 
         ctx.beginPath();
         ctx.arc(x + halfGrid, y + halfGrid, radius, 0, 2 * Math.PI);
         ctx.fill();
-        ctx.strokeStyle = '#FFFFFF'; // Contorno branco
+        ctx.strokeStyle = '#FFFFFF'; 
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Desenha a letra
+        // Letra
         ctx.fillStyle = '#FFFFFF';
         ctx.font = `bold ${GRID_SIZE * 0.5}px sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(bomb.isSuper ? 'S' : 'B', x + halfGrid, y + halfGrid * 1.05); // Ajuste fino vertical
+        ctx.fillText(bomb.isSuper ? 'S' : 'B', x + halfGrid, y + halfGrid * 1.05); 
       });
       
-      // 5. Desenha Explosões
+      // 4. Desenha Explosões
       if (textures.explosion) {
         localGameState.explosions.forEach(exp => {
           ctx.drawImage(textures.explosion, exp.x * GRID_SIZE, exp.y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
         });
+      } else {
+         // Fallback se a textura de explosão não carregar
+         localGameState.explosions.forEach(exp => {
+             ctx.fillStyle = 'orange';
+             ctx.fillRect(exp.x * GRID_SIZE, exp.y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
+         });
       }
 
-      // 6. Desenha Jogadores
+      // 5. Desenha Jogadores
       Object.values(localGameState.players).forEach(player => {
         if (player.isAlive) { 
           const x = player.x * GRID_SIZE;
           const y = player.y * GRID_SIZE;
           const halfGrid = GRID_SIZE / 2;
           
-          // Desenha o círculo da cor do jogador
+          // Círculo
           ctx.fillStyle = player.color;
           if (player.curse) {
-             ctx.globalAlpha = 0.6 + Math.sin(Date.now() / 100) * 0.3; // Pulsando
+             ctx.globalAlpha = 0.6 + Math.sin(Date.now() / 100) * 0.3; 
           }
           ctx.beginPath();
           ctx.arc(x + halfGrid, y + halfGrid, halfGrid * 0.9, 0, 2 * Math.PI);
           ctx.fill();
           ctx.globalAlpha = 1.0; 
           
-          // Desenha o emoji do jogador
+          // Emoji
           ctx.font = `${GRID_SIZE * 0.7}px sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
@@ -964,7 +959,6 @@
         if (p.curse === 'reverse') curseIcon = '🔄';
         if (p.curse === 'slow') curseIcon = '🐢';
         
-        // NOVO: Indicador de Super Bomba
         let superBombIcon = p.hasSuperBomb ? '💥' : '';
         
         item.innerHTML = `
@@ -1010,7 +1004,6 @@
 
     // --- Handlers de Input (Botões da UI) ---
 
-    // Tela Home
     document.getElementById('btn-create-room').onclick = () => {
       showTouchControlsPreference = toggleTouchControls.checked;
       ws.send(JSON.stringify({
@@ -1035,16 +1028,11 @@
       }
     };
     
-    // Tela Lobby
     document.getElementById('btn-add-bot').onclick = () => ws.send(JSON.stringify({ type: 'add_bot' }));
     document.getElementById('btn-start-game').onclick = () => ws.send(JSON.stringify({ type: 'start_game' }));
-
-    // Tela Jogo
-    btnBackToLobby.onclick = () => {
-      window.location.reload();
-    };
+    btnBackToLobby.onclick = () => window.location.reload();
     
-    // --- Lógica de Ação do Jogador ---
+    // --- Lógica de Ação ---
 
     function sendMove(direction) {
       if (!isGameActive) return;
@@ -1056,14 +1044,12 @@
       ws.send(JSON.stringify({ type: 'place_bomb' }));
     }
     
-    // --- Handlers de Input (Controles de Toque) ---
+    // --- Handlers de Input (Toque) ---
         
     function handleMovePress(direction) {
       if (moveInterval) clearInterval(moveInterval); 
       sendMove(direction); 
-      moveInterval = setInterval(() => {
-        sendMove(direction); 
-      }, 150);
+      moveInterval = setInterval(() => sendMove(direction), 150);
     }
     
     function handleMoveRelease() {
