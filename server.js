@@ -12,7 +12,9 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Serve o index.html na raiz
 app.get('/', (req, res) => {
+  // Assegura que o index.html seja servido
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
@@ -22,6 +24,9 @@ const MAP_HEIGHT = 13;
 const TILE_EMPTY = 0;
 const TILE_SOLID = 1;
 const TILE_SOFT = 2;
+const ROUND_DURATION_MS = 120000; // 2 minutos para Morte Súbita
+const SUDDEN_DEATH_INTERVAL_MS = 1000; // 1 bloco por segundo
+const ROUND_END_DELAY_MS = 1500; // (NOVO) Delay para ver a explosão final
 
 // Mapa base (Spawn points são 0)
 const ORIGINAL_MAP = [
@@ -56,8 +61,14 @@ const COLOR_NAMES = {
 };
 
 const MAX_WINS = 5;
-const POWERUP_CHANCE = 0.35;
-const POWERUP_TYPES = ['bomb-up', 'fire-up', 'bomb-pass'];
+const POWERUP_CHANCE = 0.40; // Aumentei a chance geral
+// ATUALIZADO: Adicionado 'wall-pass', 'kick-bomb', 'skull'
+const POWERUP_TYPES = ['bomb-up', 'fire-up', 'bomb-pass', 'wall-pass', 'kick-bomb', 'skull'];
+const CURSE_TYPES = ['reverse', 'slow']; // Tipos de maldição
+
+// Constantes de Morte Súbita (Bots)
+const SUDDEN_DEATH_POWER = 5;
+const SUDDEN_DEATH_BOMBS = 5;
 
 let rooms = {}; // Armazena todas as salas de jogo
 
@@ -83,8 +94,7 @@ wss.on('connection', (ws) => {
 
       // Handlers que funcionam no LOBBY (jogo não rodando)
       if (!room.isGameRunning) {
-        // if (data.type === 'change_color') handleChangeColor(ws, data); // Removido
-        if (data.type === 'change_emoji') handleChangeEmoji(ws, data);
+        if (data.type === 'change_emoji') handleChangeEmoji(ws, data); // Cor é automática
         else if (data.type === 'add_bot') handleAddBot(ws);
         else if (data.type === 'start_game') handleStartGame(ws); 
       } 
@@ -122,13 +132,17 @@ function handleCreateRoom(ws, data) {
     bombs: [],
     powerUps: [],
     isGameRunning: false,
+    isRoundEnding: false, // (NOVO) Flag para o delay de fim de rodada
     botTimers: [],
     spawnPoints: [...SPAWN_POINTS],
-    suddenDeathActivated: false, // Flag para morte súbita
+    availableColors: [...PLAYER_COLORS], // Cores disponíveis
+    roundTimer: null, // Timer para Morte Súbita (Humanos)
+    suddenDeathTimer: null, // Timer para queda de blocos
   };
   
-  // Atribui a primeira cor disponível (Vermelho)
-  const playerColor = PLAYER_COLORS[0]; 
+  // Atribui a primeira cor disponível
+  const playerColor = room.availableColors.shift() || '#888888';
+  
   room.players[playerId] = createPlayer(playerId, data.name, playerColor, false, 0, data.emoji);
   
   rooms[roomCode] = room;
@@ -157,9 +171,8 @@ function handleJoinRoom(ws, data) {
   ws.roomId = data.roomCode;
   ws.playerId = playerId;
   
-  // Atribui a próxima cor disponível
-  const usedColors = Object.values(room.players).map(p => p.color);
-  const playerColor = PLAYER_COLORS.find(c => !usedColors.includes(c)) || PLAYER_COLORS[PLAYER_COLORS.length - 1]; // Pega a próxima ou a última
+  // Atribui a primeira cor disponível
+  const playerColor = room.availableColors.shift() || '#888888';
   
   const spawnIndex = Object.keys(room.players).length;
   room.players[playerId] = createPlayer(playerId, data.name, playerColor, false, spawnIndex, data.emoji);
@@ -178,14 +191,10 @@ function handleJoinRoom(ws, data) {
   });
 }
 
-// Removido - A cor é automática agora
-// function handleChangeColor(ws, data) { ... }
-
 function handleChangeEmoji(ws, data) {
   const room = rooms[ws.roomId];
   if (room && room.players[ws.playerId]) {
-    room.players[ws.playerId].chosenEmoji = data.emoji || '😀';
-    room.players[ws.playerId].displayEmoji = data.emoji || '😀';
+    room.players[ws.playerId].emoji = data.emoji || '😀'; // ATUALIZADO (Removido display/chosen)
     broadcast(ws.roomId, {
       type: 'lobby_update',
       players: room.players
@@ -201,8 +210,8 @@ function handleAddBot(ws) {
 
   const botId = uuidv4();
   const spawnIndex = Object.keys(room.players).length;
-  const usedColors = Object.values(room.players).map(p => p.color);
-  const botColor = PLAYER_COLORS.find(c => !usedColors.includes(c)) || '#888888';
+  // Atribui a primeira cor disponível
+  const botColor = room.availableColors.shift() || '#888888';
   
   room.players[botId] = createPlayer(botId, 'Bot ' + (spawnIndex + 1), botColor, true, spawnIndex, '🤖');
   
@@ -218,6 +227,7 @@ function handleStartGame(ws) {
   if (!room || ws.playerId !== room.hostId) return;
 
   room.isGameRunning = true;
+  room.isRoundEnding = false; // (NOVO) Reseta a flag
   // Gera o estado inicial do jogo
   const initialState = generateRoundState(room.code); 
   
@@ -229,6 +239,8 @@ function handleStartGame(ws) {
   
   // Inicia a IA dos Bots
   startBotAI(room.code);
+  // Inicia timer da Morte Súbita (Humanos)
+  room.roundTimer = setTimeout(() => startSuddenDeath(room.code), ROUND_DURATION_MS);
 }
 
 
@@ -239,12 +251,20 @@ function handlePlayerDisconnect(ws) {
   const playerId = ws.playerId;
   if (!playerId) return;
   
+  // Devolve a cor do jogador para a lista de cores disponíveis
+  const player = room.players[playerId];
+  if (player) {
+    room.availableColors.push(player.color);
+  }
+  
   const playerWasHost = room.hostId === playerId;
   delete room.players[playerId];
 
   if (Object.keys(room.players).length === 0) {
     // Se a sala estiver vazia, pare a IA e delete a sala
     stopBotAI(room.code);
+    if (room.roundTimer) clearTimeout(room.roundTimer);
+    if (room.suddenDeathTimer) clearInterval(room.suddenDeathTimer);
     delete rooms[ws.roomId];
     return;
   }
@@ -255,7 +275,7 @@ function handlePlayerDisconnect(ws) {
   }
   
   // Se o jogo estava rolando, avisa os outros
-  if (room.isGameRunning) {
+  if (room.isGameRunning || room.isRoundEnding) { // (NOVO) Checa se está terminando
     broadcast(ws.roomId, {
       type: 'player_left',
       playerId: playerId,
@@ -279,9 +299,8 @@ function createPlayer(id, name, color, isBot, spawnIndex, emoji) {
   return {
     id: id,
     name: name,
-    color: color,
-    chosenEmoji: emoji || '😀', // O emoji que ele escolheu
-    displayEmoji: emoji || '😀', // O emoji que aparece (muda para '💀')
+    color: color, // Cor atribuída automaticamente
+    emoji: emoji || '😀', // ATUALIZADO (Removido display/chosen)
     ...SPAWN_POINTS[spawnIndex], // Posição inicial
     startPositionIndex: spawnIndex,
     isBot: isBot,
@@ -292,6 +311,10 @@ function createPlayer(id, name, color, isBot, spawnIndex, emoji) {
     maxBombs: 1,
     activeBombs: 0,
     canPassBombs: false,
+    canPassWalls: false, 
+    canKickBombs: false, // NOVO
+    curse: null, // NOVO (reverse, slow)
+    slowTick: false, // NOVO (para maldição)
   };
 }
 
@@ -300,16 +323,57 @@ function handlePlayerMove(ws, direction) {
   const player = room.players[ws.playerId];
   if (!player || !player.isAlive) return;
 
-  let { x, y } = player;
+  // Lógica da Maldição "Slow" (Pular 1 movimento)
+  if (player.curse === 'slow') {
+    if (player.slowTick) {
+      player.slowTick = false;
+      return; // Pula este movimento
+    }
+    player.slowTick = true; // Permite o próximo movimento
+  }
 
-  if (direction === 'up') y--;
-  else if (direction === 'down') y++;
-  else if (direction === 'left') x--;
-  else if (direction === 'right') x++;
+  let { x, y } = player;
   
+  // Lógica da Maldição "Reverse"
+  let finalDirection = direction;
+  if (player.curse === 'reverse') {
+    if (direction === 'up') finalDirection = 'down';
+    else if (direction === 'down') finalDirection = 'up';
+    else if (direction === 'left') finalDirection = 'right';
+    else if (direction === 'right') finalDirection = 'left';
+  }
+
+  if (finalDirection === 'up') y--;
+  else if (finalDirection === 'down') y++;
+  else if (finalDirection === 'left') x--;
+  else if (finalDirection === 'right') x++;
+  
+  // --- Lógica de Chutar Bomba (Kick) ---
+  const bombAtTarget = room.bombs.find(b => b.x === x && b.y === y && !b.isKicked);
+  if (bombAtTarget && player.canKickBombs && !player.canPassBombs) {
+    handleKickBomb(room, bombAtTarget, finalDirection);
+    return; // Não move o jogador, apenas chuta a bomba
+  }
+  // --- Fim da Lógica de Chute ---
+
   if (isMoveValid(room, player, x, y)) {
     player.x = x;
     player.y = y;
+    
+    // --- Lógica de Transferência de Maldição ---
+    if (player.curse) {
+      const hitPlayer = Object.values(room.players).find(p => p.isAlive && p.id !== player.id && p.x === x && p.y === y);
+      if (hitPlayer && !hitPlayer.curse) { // Só transfere se o alvo não estiver amaldiçoado
+        hitPlayer.curse = player.curse;
+        player.curse = null;
+        broadcast(room.code, {
+          type: 'curse_transferred',
+          fromId: player.id,
+          toId: hitPlayer.id,
+          curse: hitPlayer.curse
+        });
+      }
+    }
     
     // Verifica se pegou power-up
     checkPowerUpCollision(room, player);
@@ -343,7 +407,9 @@ function handlePlaceBomb(ws) {
     x: player.x,
     y: player.y,
     power: player.bombPower,
-    timer: setTimeout(() => handleExplosion(room.code, bomb.id), 3000)
+    timer: setTimeout(() => handleExplosion(room.code, bomb.id), 3000),
+    isKicked: false, // NOVO
+    slideTimer: null // NOVO
   };
   
   room.bombs.push(bomb);
@@ -354,12 +420,64 @@ function handlePlaceBomb(ws) {
   });
 }
 
+// NOVO: Função para Chutar Bomba
+function handleKickBomb(room, bomb, direction) {
+  if (bomb.isKicked) return; // Já está deslizando
+  bomb.isKicked = true; 
+
+  let dx = 0, dy = 0;
+  if (direction === 'up') dy = -1;
+  else if (direction === 'down') dy = 1;
+  else if (direction === 'left') dx = -1;
+  else if (direction === 'right') dx = 1;
+
+  let currentX = bomb.x;
+  let currentY = bomb.y;
+  
+  const slideInterval = setInterval(() => {
+    let nextX = currentX + dx;
+    let nextY = currentY + dy;
+
+    // Checa obstáculos
+    const tileType = room.gameMap[nextY][nextX];
+    const isOtherBomb = room.bombs.some(b => b.id !== bomb.id && b.x === nextX && b.y === nextY);
+    const isPlayer = Object.values(room.players).some(p => p.isAlive && p.x === nextX && p.y === nextY);
+
+    if (tileType === TILE_EMPTY && !isOtherBomb) {
+      currentX = nextX;
+      currentY = nextY;
+      bomb.x = currentX;
+      bomb.y = currentY;
+      broadcast(room.code, { type: 'bomb_moved', bombId: bomb.id, x: bomb.x, y: bomb.y });
+      
+      // Para se atingir um jogador
+      if (isPlayer) {
+        clearInterval(slideInterval);
+        bomb.isKicked = false;
+        bomb.slideTimer = null;
+      }
+    } else {
+      // Atingiu parede, jogador, ou outra bomba
+      clearInterval(slideInterval);
+      bomb.isKicked = false;
+      bomb.slideTimer = null;
+    }
+  }, 100); // Velocidade do chute (100ms por casa)
+
+  bomb.slideTimer = slideInterval; // Armazena o timer para ser limpo na explosão
+}
+
 function handleExplosion(roomCode, bombId) {
   const room = rooms[roomCode];
   if (!room) return;
   
   const bomb = room.bombs.find(b => b.id === bombId);
   if (!bomb) return;
+  
+  // Limpa o timer de chute se houver
+  if (bomb.slideTimer) {
+    clearInterval(bomb.slideTimer);
+  }
   
   // Remove a bomba da lista
   room.bombs = room.bombs.filter(b => b.id !== bombId);
@@ -395,12 +513,29 @@ function handleExplosion(roomCode, bombId) {
         room.gameMap[y][x] = TILE_EMPTY;
         tilesToUpdate.push({ x, y, newType: TILE_EMPTY });
         
-        // Chance de dropar power-up
+        // ATUALIZADO: Lógica de drop ponderada
         if (Math.random() < POWERUP_CHANCE) {
-          const type = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
+          // --- NOVO: Sistema de Drop Ponderado ---
+          const rand = Math.random();
+          let type = 'bomb-up';
+          if (rand < 0.30) { // 30%
+            type = 'bomb-up';
+          } else if (rand < 0.55) { // 25%
+            type = 'fire-up';
+          } else if (rand < 0.70) { // 15%
+            type = 'wall-pass'; 
+          } else if (rand < 0.85) { // 15%
+            type = 'kick-bomb';
+          } else if (rand < 0.95) { // 10%
+            type = 'skull'; 
+          } else { // 5%
+            type = 'bomb-pass'; 
+          }
+          // --- Fim do Sistema Ponderado ---
+
           const powerUp = {
             id: uuidv4(),
-            type: type,
+            type: type, // Usa o tipo ponderado
             x: x,
             y: y
           };
@@ -414,6 +549,7 @@ function handleExplosion(roomCode, bombId) {
       const hitBomb = room.bombs.find(b => b.x === x && b.y === y);
       if (hitBomb) {
         clearTimeout(hitBomb.timer); // Para o timer da bomba atingida
+        if (hitBomb.slideTimer) clearInterval(hitBomb.slideTimer); // Para o chute
         handleExplosion(room.code, hitBomb.id); // Detona ela imediatamente
       }
     }
@@ -440,13 +576,13 @@ function handleExplosion(roomCode, bombId) {
       const hit = explosionTiles.some(tile => tile.x === player.x && tile.y === player.y);
       if (hit) {
         player.isAlive = false;
-        player.displayEmoji = '💀'; 
+        // player.displayEmoji = '💀'; // REMOVIDO (Conforme solicitado)
         
         broadcast(room.code, { 
           type: 'player_update', 
           playerId: player.id, 
-          isAlive: false,
-          displayEmoji: '💀' 
+          isAlive: false
+          // displayEmoji: '💀' // REMOVIDO
         });
       }
     }
@@ -462,18 +598,22 @@ function isMoveValid(room, player, x, y) {
   if (x < 0 || x >= MAP_WIDTH || y < 0 || y >= MAP_HEIGHT) {
     return false;
   }
-  // 2. Checa paredes
+  
+  // 2. Checa paredes (ATUALIZADO)
   const tileType = room.gameMap[y][x];
-  if (tileType === TILE_SOLID || tileType === TILE_SOFT) {
-    return false;
+  if (tileType === TILE_SOLID) {
+    return false; // Sempre para em parede sólida
+  }
+  if (tileType === TILE_SOFT && !player.canPassWalls) {
+    return false; // Para em parede destrutível, *a menos* que tenha o power-up
   }
   
-  // 3. Checa bombas
+  // 3. Checa bombas (ATUALIZADO)
   const isBombAtPos = room.bombs.some(b => b.x === x && b.y === y);
   if (isBombAtPos) {
-    // É válido se o jogador puder passar por bombas
-    // OU se a bomba for a que ele acabou de sair
-    return player.canPassBombs || (x === player.x && y === player.y);
+    if (player.canPassBombs) return true; // Pode passar
+    if (player.canKickBombs && !room.bombs.find(b => b.x === x && b.y === y).isKicked) return false; // Não pode passar, mas vai chutar (handlePlayerMove trata)
+    return (player.x === x && player.y === y); // Permite "sair" da bomba que acabou de colocar
   }
 
   return true;
@@ -485,54 +625,81 @@ function checkPowerUpCollision(room, player) {
   if (powerUpIndex > -1) {
     const powerUp = room.powerUps[powerUpIndex];
     
-    // Aplica o bônus
+    // Aplica o bônus (ATUALIZADO)
     if (powerUp.type === 'bomb-up') player.maxBombs++;
     if (powerUp.type === 'fire-up') player.bombPower++;
     if (powerUp.type === 'bomb-pass') player.canPassBombs = true;
+    if (powerUp.type === 'wall-pass') player.canPassWalls = true;
+    if (powerUp.type === 'kick-bomb') player.canKickBombs = true;
+    if (powerUp.type === 'skull') {
+      // Remove maldição anterior, se houver
+      player.curse = null;
+      // Aplica maldição aleatória
+      player.curse = CURSE_TYPES[Math.floor(Math.random() * CURSE_TYPES.length)];
+      broadcast(room.code, {
+        type: 'player_cursed',
+        playerId: player.id,
+        curse: player.curse
+      });
+    }
     
     // Remove o power-up
     room.powerUps.splice(powerUpIndex, 1);
     
-    // Avisa os clientes
-    broadcast(room.code, {
-      type: 'powerup_collected',
-      powerUpId: powerUp.id,
-      playerId: player.id
-    });
+    // Avisa os clientes (exceto da caveira, que já foi avisada)
+    if (powerUp.type !== 'skull') {
+      broadcast(room.code, {
+        type: 'powerup_collected',
+        powerUpId: powerUp.id,
+        playerId: player.id
+      });
+    }
   }
 }
 
 
 function checkRoundOver(roomCode) {
   const room = rooms[roomCode];
-  if (!room || !room.isGameRunning) return;
+  // (NOVO) Não checa se a rodada já está terminando
+  if (!room || !room.isGameRunning || room.isRoundEnding) return;
 
   const alivePlayers = Object.values(room.players).filter(p => p.isAlive);
+  const aliveHumans = alivePlayers.filter(p => !p.isBot);
   
-  // --- LÓGICA DE MORTE SÚBITA (BOTS) ---
-  if (alivePlayers.length > 1 && !room.suddenDeathActivated && alivePlayers.every(p => p.isBot)) {
-    room.suddenDeathActivated = true;
-    
-    alivePlayers.forEach(bot => {
-      bot.bombPower = 5; // Poder máximo
-      bot.maxBombs = 3;  // Bombas máximas
+  // Morte Súbita (Bots): Se restarem 0 humanos e 2+ bots
+  if (aliveHumans.length === 0 && alivePlayers.length > 1) {
+    if (!room.isSuddenDeath) { // Ativa a morte súbita (apenas uma vez)
+      room.isSuddenDeath = true;
+      broadcast(room.code, { type: 'sudden_death' });
       
-      // Avisa o cliente para atualizar o placar
-      broadcast(room.code, { 
-        type: 'player_update', 
-        playerId: bot.id,
-        bombPower: bot.bombPower,
-        maxBombs: bot.maxBombs
+      // Dá poder máximo aos bots restantes
+      alivePlayers.forEach(bot => {
+        bot.bombPower = SUDDEN_DEATH_POWER;
+        bot.maxBombs = SUDDEN_DEATH_BOMBS;
+        broadcast(room.code, {
+          type: 'player_update',
+          playerId: bot.id,
+          bombPower: bot.bombPower,
+          maxBombs: bot.maxBombs
+        });
       });
-    });
-    
-    broadcast(room.code, { type: 'sudden_death' });
+    }
   }
-  // --- FIM DA LÓGICA DE MORTE SÚBITA ---
 
+  // Fim da Rodada: Se restar 1 ou 0 jogadores
   if (alivePlayers.length <= 1) {
+    // (NOVO) ATIVA A FLAG DE FIM DE RODADA
+    room.isRoundEnding = true;
+    
     room.isGameRunning = false; // Pausa o jogo
+    room.isSuddenDeath = false; // Reseta a morte súbita (bots)
     stopBotAI(room.code); // Para os bots
+    
+    // Para timers de Morte Súbita (Humanos)
+    if (room.roundTimer) clearTimeout(room.roundTimer);
+    if (room.suddenDeathTimer) clearInterval(room.suddenDeathTimer);
+    room.roundTimer = null;
+    room.suddenDeathTimer = null;
     
     let winnerName = "Empate";
     let winner = null;
@@ -543,30 +710,83 @@ function checkRoundOver(roomCode) {
       winnerName = winner.name;
     }
     
-    // Avisa do fim da rodada
-    broadcast(room.code, {
-      type: 'round_over',
-      winnerName: winnerName
-    });
-    
-    // Avisa da atualização de score
-    broadcast(room.code, {
-      type: 'score_update',
-      players: room.players
-    });
+    // --- (NOVO) DELAY PARA FIM DA RODADA ---
+    // Agenda o anúncio do fim da rodada para daqui a X ms
+    setTimeout(() => {
+        // Avisa do fim da rodada
+        broadcast(room.code, {
+          type: 'round_over',
+          winnerName: winnerName
+        });
+        
+        // Avisa da atualização de score
+        broadcast(room.code, {
+          type: 'score_update',
+          players: room.players
+        });
 
-    // Checa se o jogo acabou (alguém atingiu MAX_WINS)
-    if (winner && winner.score >= MAX_WINS) {
-      broadcast(room.code, {
-        type: 'game_over',
-        winnerName: winner.name
-      });
-      // Não reinicia, o jogo acabou.
-    } else {
-      // Agenda o reinício da próxima rodada
-      setTimeout(() => startNewRound(roomCode), 5000);
+        // Checa se o jogo acabou (alguém atingiu MAX_WINS)
+        if (winner && winner.score >= MAX_WINS) {
+          broadcast(room.code, {
+            type: 'game_over',
+            winnerName: winner.name
+          });
+          // Não reinicia, o jogo acabou.
+        } else {
+          // Agenda o reinício da próxima rodada
+          setTimeout(() => startNewRound(roomCode), 5000); // 5s após a msg de fim de rodada
+        }
+    }, ROUND_END_DELAY_MS); // (NOVO) Espera 1.5s
+  }
+}
+
+// NOVO: Inicia a Morte Súbita (Humanos)
+function startSuddenDeath(roomCode) {
+  const room = rooms[roomCode];
+  if (!room || !room.isGameRunning) return;
+
+  broadcast(room.code, { type: 'sudden_death_starting' });
+  
+  // Começa a derrubar blocos
+  room.suddenDeathTimer = setInterval(() => handleSuddenDeathTick(roomCode), SUDDEN_DEATH_INTERVAL_MS);
+}
+
+// NOVO: Lógica da Morte Súbita (Tick)
+function handleSuddenDeathTick(roomCode) {
+  const room = rooms[roomCode];
+  if (!room || !room.isGameRunning) {
+    if (room && room.suddenDeathTimer) clearInterval(room.suddenDeathTimer);
+    return;
+  }
+  
+  // Encontra todas as casas vazias (chão)
+  const emptyTiles = [];
+  for (let y = 0; y < MAP_HEIGHT; y++) {
+    for (let x = 0; x < MAP_WIDTH; x++) {
+      if (room.gameMap[y][x] === TILE_EMPTY) {
+        // Não derruba blocos em cima de jogadores ou power-ups
+        const isPlayer = Object.values(room.players).some(p => p.x === x && p.y === y);
+        const isPowerUp = room.powerUps.some(p => p.x === x && p.y === y);
+        if (!isPlayer && !isPowerUp) {
+          emptyTiles.push({ x, y });
+        }
+      }
     }
   }
+  
+  if (emptyTiles.length === 0) return; // Não há onde derrubar
+
+  // Escolhe uma casa vazia aleatória
+  const tile = emptyTiles[Math.floor(Math.random() * emptyTiles.length)];
+  
+  // Transforma em parede sólida
+  room.gameMap[tile.y][tile.x] = TILE_SOLID;
+  
+  // Avisa os clientes
+  broadcast(room.code, {
+    type: 'map_update',
+    tiles: [{ x: tile.x, y: tile.y, newType: TILE_SOLID }]
+  });
 }
 
 
@@ -575,6 +795,14 @@ function startNewRound(roomCode) {
   if (!room) return;
 
   room.isGameRunning = true;
+  room.isSuddenDeath = false; // Garante que a morte súbita (bots) está desativada
+  room.isRoundEnding = false; // (NOVO) Reseta a flag
+  
+  // Limpa timers antigos e inicia um novo
+  if (room.roundTimer) clearTimeout(room.roundTimer);
+  if (room.suddenDeathTimer) clearInterval(room.suddenDeathTimer);
+  room.roundTimer = setTimeout(() => startSuddenDeath(room.code), ROUND_DURATION_MS);
+  
   const newState = generateRoundState(roomCode);
   
   broadcast(room.code, {
@@ -591,10 +819,12 @@ function generateRoundState(roomCode) {
   if (!room) return;
 
   // 1. Limpa estado anterior
-  room.bombs.forEach(b => clearTimeout(b.timer));
+  room.bombs.forEach(b => {
+    clearTimeout(b.timer);
+    if (b.slideTimer) clearInterval(b.slideTimer);
+  });
   room.bombs = [];
   room.powerUps = [];
-  room.suddenDeathActivated = false; // Reseta a Morte Súbita
   
   // 2. Gera novo mapa aleatório (baseado no original)
   room.gameMap = JSON.parse(JSON.stringify(ORIGINAL_MAP)); // Deep copy
@@ -620,7 +850,10 @@ function generateRoundState(roomCode) {
     player.maxBombs = 1;
     player.activeBombs = 0;
     player.canPassBombs = false;
-    player.displayEmoji = player.chosenEmoji; 
+    player.canPassWalls = false;
+    player.canKickBombs = false; // NOVO
+    player.curse = null; // NOVO
+    // player.displayEmoji = player.chosenEmoji; // REMOVIDO
     
     // Garante que a área de spawn esteja limpa
     const clearRadius = 1; // 1 quadrado ao redor
@@ -708,6 +941,15 @@ function getDangerZones(room) {
 function runBotLogic(room, bot) {
   if (!bot.isAlive || !room.isGameRunning) return;
   
+  // Maldição "Slow" da Caveira
+  if (bot.curse === 'slow') {
+    if (bot.slowTick) {
+      bot.slowTick = false;
+      return; // Pula este tick
+    }
+    bot.slowTick = true;
+  }
+
   const { x, y } = bot;
   const { code: roomCode } = room; 
   const { id: botId } = bot; 
@@ -716,51 +958,81 @@ function runBotLogic(room, bot) {
   const dangerZones = getDangerZones(room);
   const isBotInDanger = dangerZones.has(`${x},${y}`);
   
-  // --- 2. PRIORIDADE MÁXIMA: Fugir do perigo! ---
+  // --- 2. PRIORIDADE 1: Fugir do perigo! ---
   if (isBotInDanger) {
     // 1. Tenta achar um local *perfeitamente* seguro
     let escapeMoves = getSafeMoves(room, bot, dangerZones); 
     
     if (escapeMoves.length === 0) {
       // 2. FALHOU. Está preso. Tenta *qualquer* movimento válido (ignorando o perigo futuro).
-      //    Qualquer movimento é melhor do que ficar parado na bomba.
       escapeMoves = getSafeMoves(room, bot, new Set()); // Passa um Set de perigo VAZIO
     }
 
     if (escapeMoves.length > 0) {
-      // Foge para o melhor local que encontrou (seja perfeitamente seguro ou não)
+      // Foge para o melhor local que encontrou
       const bestMove = escapeMoves[Math.floor(Math.random() * escapeMoves.length)];
       handlePlayerMove({ roomId: roomCode, playerId: botId }, bestMove);
     }
-    // Se ainda não há movimentos (preso por paredes), o bot fica parado.
-    return; 
+    return; // FIM DO PENSAMENTO (Fugir é prioridade total)
   }
 
   // Pega todos os movimentos válidos E seguros (para lógica normal)
   const allSafeMoves = getSafeMoves(room, bot, dangerZones); 
 
   // Define os movimentos adjacentes para checagem
-  const adjacentMoves = [
+  let adjacentMoves = [
     { dir: 'up',    x: x,     y: y - 1 },
     { dir: 'down',  x: x,     y: y + 1 },
     { dir: 'left',  x: x - 1, y: y     },
     { dir: 'right', x: x + 1, y: y     }
   ];
+  
+  // Maldição "Reverse" da Caveira
+  if (bot.curse === 'reverse') {
+     adjacentMoves = [
+      { dir: 'down',  x: x,     y: y - 1 }, // Tenta ir para cima, mas lógica manda 'down'
+      { dir: 'up',    x: x,     y: y + 1 },
+      { dir: 'right', x: x - 1, y: y     },
+      { dir: 'left',  x: x + 1, y: y     }
+    ];
+  }
 
-  // --- 3. PRIORIDADE 2: Pegar Power-ups (se não estiver em perigo) ---
+
+  // --- 3. PRIORIDADE 2: Pegar Power-ups ---
   for (const move of adjacentMoves) {
     const isPowerUp = room.powerUps.some(p => p.x === move.x && p.y === move.y);
-    // Se for um powerup E for um movimento válido E seguro
+    // ATUALIZADO: Checa se é um movimento seguro
     if (isPowerUp && isMoveValid(room, bot, move.x, move.y) && !dangerZones.has(`${move.x},${move.y}`)) {
       handlePlayerMove({ roomId: roomCode, playerId: botId }, move.dir);
       return; // Pegou o power-up, encerra o "pensamento"
     }
   }
   
-  // --- 4. PRIORIDADE 3: Colocar Bomba (Estratégico) ---
-  // CORREÇÃO: Só coloca bomba se tiver uma rota de fuga
+  // --- 4. PRIORIDADE 3: Caçar outros jogadores (NOVO) ---
   if (bot.activeBombs < bot.maxBombs && allSafeMoves.length > 0) {
-    let placedBomb = false;
+    let placedBombForKill = false;
+    const otherPlayers = Object.values(room.players).filter(p => p.isAlive && p.id !== bot.id);
+
+    for (const move of adjacentMoves) {
+      if (move.x < 0 || move.x >= MAP_WIDTH || move.y < 0 || move.y >= MAP_HEIGHT) continue;
+      
+      // Checa se um jogador está adjacente
+      const isPlayerAtPos = otherPlayers.some(p => p.x === move.x && p.y === move.y);
+      
+      if (isPlayerAtPos) {
+        // Encontrou um alvo!
+        handlePlaceBomb({ roomId: roomCode, playerId: botId });
+        placedBombForKill = true;
+        // A IA agora vai fugir no próximo tick
+        break; 
+      }
+    }
+    if (placedBombForKill) return; // Colocou bomba, encerra o "pensamento"
+  }
+  
+  // --- 5. PRIORIDADE 4: Colocar Bomba (Estratégico - Paredes) ---
+  if (bot.activeBombs < bot.maxBombs && allSafeMoves.length > 0) {
+    let placedBombForWall = false;
     for (const move of adjacentMoves) {
       if (move.x < 0 || move.x >= MAP_WIDTH || move.y < 0 || move.y >= MAP_HEIGHT) continue;
       
@@ -768,15 +1040,14 @@ function runBotLogic(room, bot) {
       if (tileType === TILE_SOFT) {
         // Encontrou um alvo!
         handlePlaceBomb({ roomId: roomCode, playerId: botId });
-        placedBomb = true;
-        // A IA agora vai fugir no próximo tick, pois `isBotInDanger` será true
+        placedBombForWall = true;
         break; 
       }
     }
-    if (placedBomb) return;
+    if (placedBombForWall) return; // Colocou bomba, encerra o "pensamento"
   }
 
-  // --- 5. PRIORIDADE 4: Mover (com segurança) ou Ficar Parado ---
+  // --- 6. PRIORIDADE 5: Mover (com segurança) ou Ficar Parado ---
   const action = Math.random();
   if (action < 0.70 && allSafeMoves.length > 0) { // 70% chance de mover
     // Move para um local seguro aleatório
@@ -789,13 +1060,24 @@ function runBotLogic(room, bot) {
 // FUNÇÃO ATUALIZADA: Agora aceita 'dangerZones'
 function getSafeMoves(room, bot, dangerZones) {
   const { x, y } = bot;
-  const possibleMoves = [
+  
+  let possibleMoves = [
     { dir: 'up',    x: x,     y: y - 1 },
     { dir: 'down',  x: x,     y: y + 1 },
     { dir: 'left',  x: x - 1, y: y     },
     { dir: 'right', x: x + 1, y: y     }
   ];
   
+  // Se estiver amaldiçoado com reverso, a IA precisa saber disso
+  if (bot.curse === 'reverse') {
+     possibleMoves = [
+      { dir: 'down',  x: x,     y: y - 1 }, // Move para cima (ação 'down')
+      { dir: 'up',    x: x,     y: y + 1 }, // Move para baixo (ação 'up')
+      { dir: 'right', x: x - 1, y: y     },
+      { dir: 'left',  x: x + 1, y: y     }
+    ];
+  }
+
   return possibleMoves
     // É um local válido para andar? (sem paredes/bombas)
     .filter(move => isMoveValid(room, bot, move.x, move.y))

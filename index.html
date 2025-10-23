@@ -79,6 +79,18 @@
       margin-right: 10px;
       vertical-align: middle;
     }
+    
+    /* NOVO: Estilo para o toggle na home */
+    .home-option {
+      margin: 15px 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .home-option label {
+        margin: 0 10px 0 0;
+    }
 
     /* Telas (Home, Lobby, Jogo) */
     .screen {
@@ -231,6 +243,7 @@
       overflow-y: auto; /* Adiciona scroll se necessário */
       scrollbar-width: thin;
       scrollbar-color: #888 #444;
+      margin-bottom: 15px; /* Espaço para o botão de voltar */
     }
     
     .scoreboard-player {
@@ -268,21 +281,8 @@
     }
     
     /* Controles de Toque (NOVO) */
-    #touch-controls-panel {
-      margin-top: 15px;
-      background-color: #444;
-      padding: 10px;
-      border-radius: 5px;
-      font-size: 0.9rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    #touch-controls-panel input {
-      margin-left: 10px;
-      vertical-align: middle;
-    }
+    /* REMOVIDO PAINEL DA SIDEBAR
+    #touch-controls-panel { ... } */
     
     /* D-Pad (Esquerda) */
     #touch-dpad {
@@ -409,6 +409,12 @@
           <option value="🐸">🐸 Sapo</option>
         </select>
       </div>
+      
+      <!-- NOVO: Toggle de Controles movido para cá -->
+      <div class="home-option">
+        <label for="toggle-touch-controls">Exibir Controles de Toque:</label>
+        <input type="checkbox" id="toggle-touch-controls">
+      </div>
 
       <button id="btn-create-room" style="margin-top: 20px;">Criar Sala</button>
       
@@ -459,11 +465,8 @@
           <!-- Placar será inserido aqui pelo JS -->
         </div>
         
-        <!-- Painel de Controles de Toque (NOVO) -->
-        <div id="touch-controls-panel">
-          <label for="toggle-touch-controls">Controles de Toque:</label>
-          <input type="checkbox" id="toggle-touch-controls">
-        </div>
+        <!-- REMOVIDO PAINEL DA SIDEBAR
+        <div id="touch-controls-panel"> ... </div> -->
         
         <button id="btn-back-to-lobby">Voltar ao Lobby</button>
       </div>
@@ -514,6 +517,7 @@
     let texturesLoaded = false;
     let lastNotificationTimer = null;
     let moveInterval = null; // <-- Para movimento contínuo
+    let showTouchControlsPreference = false; // <-- Salva a preferência
     
     // Estado local do mundo do jogo
     let localGameState = {
@@ -616,6 +620,15 @@
             localGameState.powerUps = data.initialState.powerUps || [];
             localGameState.explosions = []; // Limpa explosões
             
+            // ATUALIZADO: Mostra controles de toque com base na preferência
+            if (showTouchControlsPreference) {
+              touchDpad.style.display = 'block';
+              touchActionButton.style.display = 'block';
+            } else {
+              touchDpad.style.display = 'none';
+              touchActionButton.style.display = 'none';
+            }
+            
             updateScoreboard();
             isGameActive = true;
             btnBackToLobby.style.display = 'none';
@@ -650,8 +663,12 @@
             btnBackToLobby.style.display = 'block'; // Mostra o botão de voltar
             break;
             
-          case 'sudden_death': // <-- NOVO EVENTO
-            showGameNotification("Morte Súbita! Bots com poder máximo!");
+          case 'sudden_death': // <-- NOVO EVENTO (Bots)
+             showGameNotification("Morte Súbita! Apenas bots restaram!");
+             break;
+
+          case 'sudden_death_starting': // <-- NOVO EVENTO (Humanos)
+            showGameNotification("Morte Súbita! Blocos caindo!");
             break;
             
           case 'player_left':
@@ -668,6 +685,14 @@
             if (localGameState.players[data.playerId]) {
               localGameState.players[data.playerId].x = data.x;
               localGameState.players[data.playerId].y = data.y;
+            }
+            break;
+          
+          case 'bomb_moved': // <-- NOVO EVENTO (Chute)
+            const kickedBomb = localGameState.bombs.find(b => b.id === data.bombId);
+            if (kickedBomb) {
+                kickedBomb.x = data.x;
+                kickedBomb.y = data.y;
             }
             break;
             
@@ -711,6 +736,9 @@
                 if (powerUp.type === 'bomb-up') player.maxBombs++;
                 if (powerUp.type === 'fire-up') player.bombPower++;
                 if (powerUp.type === 'bomb-pass') player.canPassBombs = true;
+                if (powerUp.type === 'wall-pass') player.canPassWalls = true;
+                if (powerUp.type === 'kick-bomb') player.canKickBombs = true;
+                // Caveira já foi tratada em 'player_cursed'
               }
               
               localGameState.powerUps.splice(pUpIndex, 1);
@@ -718,12 +746,28 @@
             }
             break;
             
+          case 'player_cursed': // <-- NOVO EVENTO
+            if (localGameState.players[data.playerId]) {
+                localGameState.players[data.playerId].curse = data.curse;
+                // Poderia adicionar um feedback visual aqui (ex: mudar cor)
+                showGameNotification(`${localGameState.players[data.playerId].name} pegou uma caveira! (${data.curse})`);
+            }
+            // Remove o power-up visualmente (se ainda existir)
+            localGameState.powerUps = localGameState.powerUps.filter(p => p.x !== localGameState.players[data.playerId].x || p.y !== localGameState.players[data.playerId].y);
+            break;
+            
+          case 'curse_transferred': // <-- NOVO EVENTO
+            if (localGameState.players[data.fromId]) localGameState.players[data.fromId].curse = null;
+            if (localGameState.players[data.toId]) localGameState.players[data.toId].curse = data.curse;
+            showGameNotification(`Maldição passada para ${localGameState.players[data.toId].name}!`);
+            break;
+
           case 'player_update': // <-- ATUALIZADO
             if (localGameState.players[data.playerId]) {
               const player = localGameState.players[data.playerId];
               // Atualiza apenas os campos que vieram na mensagem
               if (data.isAlive !== undefined) player.isAlive = data.isAlive;
-              if (data.displayEmoji) player.displayEmoji = data.displayEmoji;
+              // if (data.displayEmoji) player.displayEmoji = data.displayEmoji; // REMOVIDO
               if (data.bombPower) player.bombPower = data.bombPower;
               if (data.maxBombs) player.maxBombs = data.maxBombs;
               updateScoreboard(); // Atualiza o placar
@@ -794,7 +838,7 @@
         }
       }
       
-      // 3. Desenha Power-ups
+      // 3. Desenha Power-ups (ATUALIZADO com novos emojis)
       localGameState.powerUps.forEach(p => {
         ctx.font = `${GRID_SIZE * 0.6}px sans-serif`;
         ctx.textAlign = 'center';
@@ -802,7 +846,10 @@
         let emoji = '❓';
         if (p.type === 'bomb-up') emoji = '💣';
         if (p.type === 'fire-up') emoji = '🔥';
-        if (p.type === 'bomb-pass') emoji = '👟';
+        if (p.type === 'bomb-pass') emoji = '➡️'; // Passar por bombas
+        if (p.type === 'wall-pass') emoji = '👻'; // Passar por paredes
+        if (p.type === 'kick-bomb') emoji = '👟'; // Chutar bomba
+        if (p.type === 'skull') emoji = '💀';     // Caveira
         ctx.fillText(emoji, (p.x * GRID_SIZE) + (GRID_SIZE / 2), (p.y * GRID_SIZE) + (GRID_SIZE / 2));
       });
 
@@ -820,36 +867,31 @@
         });
       }
 
-      // 6. Desenha Jogadores
+      // 6. Desenha Jogadores (ATUALIZADO: Não desenha se morto)
       Object.values(localGameState.players).forEach(player => {
-        if (player.isAlive) {
+        if (player.isAlive) { // Só desenha se estiver vivo
           const x = player.x * GRID_SIZE;
           const y = player.y * GRID_SIZE;
           const halfGrid = GRID_SIZE / 2;
           
           // Desenha o círculo da cor do jogador
           ctx.fillStyle = player.color;
+          // Efeito visual para maldição
+          if (player.curse) {
+             ctx.globalAlpha = 0.6 + Math.sin(Date.now() / 100) * 0.3; // Pulsando
+          }
           ctx.beginPath();
           ctx.arc(x + halfGrid, y + halfGrid, halfGrid * 0.9, 0, 2 * Math.PI);
           ctx.fill();
+          ctx.globalAlpha = 1.0; // Reseta alpha
           
           // Desenha o emoji do jogador
           ctx.font = `${GRID_SIZE * 0.7}px sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(player.displayEmoji, x + halfGrid, y + (halfGrid * 1.1)); // Ajuste fino vertical
-        } else {
-          // Se morto, desenha o emoji de caveira (lógica já tratada pelo displayEmoji)
-           const x = player.x * GRID_SIZE;
-           const y = player.y * GRID_SIZE;
-           const halfGrid = GRID_SIZE / 2;
-           ctx.globalAlpha = 0.7; // Leve transparência
-           ctx.font = `${GRID_SIZE * 0.7}px sans-serif`;
-           ctx.textAlign = 'center';
-           ctx.textBaseline = 'middle';
-           ctx.fillText(player.displayEmoji, x + halfGrid, y + (halfGrid * 1.1));
-           ctx.globalAlpha = 1.0;
+          ctx.fillText(player.emoji, x + halfGrid, y + (halfGrid * 1.1)); // Ajuste fino vertical
         }
+        // Se morto, não desenha nada
       });
 
       requestAnimationFrame(gameLoop);
@@ -872,7 +914,7 @@
         item.className = 'player-lobby-item';
         
         // Estiliza a cor
-        const colorBox = `<span style="border-left: 6px solid ${p.color}; padding-left: 8px; font-size: 1.5rem;">${p.displayEmoji}</span>`;
+        const colorBox = `<span style="border-left: 6px solid ${p.color}; padding-left: 8px; font-size: 1.5rem;">${p.emoji}</span>`;
         
         let hostTag = (p.id === hostId) ? ' (Host) 👑' : '';
         item.innerHTML = `${colorBox} ${p.name} ${hostTag}`;
@@ -904,9 +946,14 @@
           item.classList.add('dead');
         }
         
+        // ATUALIZADO: Mostra ícone de maldição se houver
+        let curseIcon = '';
+        if (p.curse === 'reverse') curseIcon = '🔄';
+        if (p.curse === 'slow') curseIcon = '🐢';
+        
         item.innerHTML = `
-          <div class="player-score">${p.displayEmoji} ${p.score}</div>
-          <div class="player-name">${p.name}</div>
+          <div class="player-score">${p.emoji} ${p.score}</div>
+          <div class="player-name">${p.name} ${curseIcon}</div>
           <div class="player-stats">
             💣 ${p.maxBombs} &nbsp;&nbsp; 🔥 ${p.bombPower}
           </div>
@@ -969,6 +1016,8 @@
 
     // Tela Home
     document.getElementById('btn-create-room').onclick = () => {
+      // ATUALIZADO: Salva a preferência dos controles de toque
+      showTouchControlsPreference = toggleTouchControls.checked;
       ws.send(JSON.stringify({
         type: 'create_room',
         name: document.getElementById('player-name').value,
@@ -978,6 +1027,8 @@
     };
     
     document.getElementById('btn-join-room').onclick = () => {
+      // ATUALIZADO: Salva a preferência dos controles de toque
+      showTouchControlsPreference = toggleTouchControls.checked;
       const code = document.getElementById('room-code').value.toUpperCase();
       if (code.length === 4) {
         ws.send(JSON.stringify({
@@ -1016,11 +1067,8 @@
     
     // --- Handlers de Input (Controles de Toque - ATUALIZADOS) ---
     
-    toggleTouchControls.addEventListener('change', (e) => {
-      const show = e.target.checked;
-      touchDpad.style.display = show ? 'block' : 'none';
-      touchActionButton.style.display = show ? 'block' : 'none';
-    });
+    // REMOVIDO listener do change, a lógica agora é na inicialização e game_start
+    /* toggleTouchControls.addEventListener('change', (e) => { ... }); */
     
     // Lógica de Movimento Contínuo
     function handleMovePress(direction) {
@@ -1067,9 +1115,14 @@
       
       if (isMobile) {
         toggleTouchControls.checked = true;
-        // Ativa a lógica do listener para exibir os controles
-        toggleTouchControls.dispatchEvent(new Event('change'));
       }
+      // Salva o estado inicial (seja default ou mobile)
+      showTouchControlsPreference = toggleTouchControls.checked; 
+      
+      // Listener para salvar a preferência se o usuário mudar ANTES de entrar
+      toggleTouchControls.addEventListener('change', (e) => {
+         showTouchControlsPreference = e.target.checked;
+      });
       
       preloadTextures(); // Inicia o carregamento das texturas
     }
