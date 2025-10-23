@@ -26,7 +26,8 @@ const TILE_SOLID = 1;
 const TILE_SOFT = 2;
 const ROUND_DURATION_MS = 120000; // 2 minutos para Morte Súbita
 const SUDDEN_DEATH_INTERVAL_MS = 1000; // 1 bloco por segundo
-const ROUND_END_DELAY_MS = 1500; // (NOVO) Delay para ver a explosão final
+const ROUND_END_DELAY_MS = 1500; // Delay para ver a explosão final
+const SUPER_BOMB_POWER = 3; // (NOVO) Poder da Super Bomba
 
 // Mapa base (Spawn points são 0)
 const ORIGINAL_MAP = [
@@ -61,9 +62,9 @@ const COLOR_NAMES = {
 };
 
 const MAX_WINS = 5;
-const POWERUP_CHANCE = 0.40; // Aumentei a chance geral
-// ATUALIZADO: Adicionado 'wall-pass', 'kick-bomb', 'skull'
-const POWERUP_TYPES = ['bomb-up', 'fire-up', 'bomb-pass', 'wall-pass', 'kick-bomb', 'skull'];
+const POWERUP_CHANCE = 0.40;
+// ATUALIZADO: Adicionado 'super-bomb'
+const POWERUP_TYPES = ['bomb-up', 'fire-up', 'bomb-pass', 'wall-pass', 'kick-bomb', 'skull', 'super-bomb'];
 const CURSE_TYPES = ['reverse', 'slow']; // Tipos de maldição
 
 // Constantes de Morte Súbita (Bots)
@@ -132,7 +133,7 @@ function handleCreateRoom(ws, data) {
     bombs: [],
     powerUps: [],
     isGameRunning: false,
-    isRoundEnding: false, // (NOVO) Flag para o delay de fim de rodada
+    isRoundEnding: false, // Flag para o delay de fim de rodada
     botTimers: [],
     spawnPoints: [...SPAWN_POINTS],
     availableColors: [...PLAYER_COLORS], // Cores disponíveis
@@ -194,7 +195,7 @@ function handleJoinRoom(ws, data) {
 function handleChangeEmoji(ws, data) {
   const room = rooms[ws.roomId];
   if (room && room.players[ws.playerId]) {
-    room.players[ws.playerId].emoji = data.emoji || '😀'; // ATUALIZADO (Removido display/chosen)
+    room.players[ws.playerId].emoji = data.emoji || '😀'; 
     broadcast(ws.roomId, {
       type: 'lobby_update',
       players: room.players
@@ -227,7 +228,7 @@ function handleStartGame(ws) {
   if (!room || ws.playerId !== room.hostId) return;
 
   room.isGameRunning = true;
-  room.isRoundEnding = false; // (NOVO) Reseta a flag
+  room.isRoundEnding = false; // Reseta a flag
   // Gera o estado inicial do jogo
   const initialState = generateRoundState(room.code); 
   
@@ -275,7 +276,7 @@ function handlePlayerDisconnect(ws) {
   }
   
   // Se o jogo estava rolando, avisa os outros
-  if (room.isGameRunning || room.isRoundEnding) { // (NOVO) Checa se está terminando
+  if (room.isGameRunning || room.isRoundEnding) { // Checa se está terminando
     broadcast(ws.roomId, {
       type: 'player_left',
       playerId: playerId,
@@ -300,7 +301,7 @@ function createPlayer(id, name, color, isBot, spawnIndex, emoji) {
     id: id,
     name: name,
     color: color, // Cor atribuída automaticamente
-    emoji: emoji || '😀', // ATUALIZADO (Removido display/chosen)
+    emoji: emoji || '😀', 
     ...SPAWN_POINTS[spawnIndex], // Posição inicial
     startPositionIndex: spawnIndex,
     isBot: isBot,
@@ -312,9 +313,10 @@ function createPlayer(id, name, color, isBot, spawnIndex, emoji) {
     activeBombs: 0,
     canPassBombs: false,
     canPassWalls: false, 
-    canKickBombs: false, // NOVO
-    curse: null, // NOVO (reverse, slow)
-    slowTick: false, // NOVO (para maldição)
+    canKickBombs: false, 
+    hasSuperBomb: false, // (NOVO) Flag para Super Bomba
+    curse: null, // (reverse, slow)
+    slowTick: false, // (para maldição)
   };
 }
 
@@ -401,22 +403,36 @@ function handlePlaceBomb(ws) {
 
   player.activeBombs++;
   
+  let bombPower = player.bombPower;
+  let isSuper = false;
+  
+  // Verifica se é uma Super Bomba
+  if (player.hasSuperBomb) {
+      bombPower = SUPER_BOMB_POWER;
+      isSuper = true;
+      player.hasSuperBomb = false; // Gasta a super bomba
+      // Avisa o cliente (opcional, mas bom para UI)
+      broadcast(room.code, { type: 'player_update', playerId: player.id, hasSuperBomb: false });
+  }
+
   const bomb = {
     id: uuidv4(),
     ownerId: player.id,
     x: player.x,
     y: player.y,
-    power: player.bombPower,
+    power: bombPower, // Usa o poder calculado
+    isSuper: isSuper, // (NOVO) Flag para Super Bomba
     timer: setTimeout(() => handleExplosion(room.code, bomb.id), 3000),
-    isKicked: false, // NOVO
-    slideTimer: null // NOVO
+    isKicked: false, 
+    slideTimer: null 
   };
   
   room.bombs.push(bomb);
   
+  // Avisa o cliente sobre a bomba, incluindo se é Super
   broadcast(room.code, {
     type: 'bomb_placed',
-    bomb: { id: bomb.id, x: bomb.x, y: bomb.y } // Só envia o essencial
+    bomb: { id: bomb.id, x: bomb.x, y: bomb.y, isSuper: bomb.isSuper } // Envia isSuper
   });
 }
 
@@ -437,6 +453,14 @@ function handleKickBomb(room, bomb, direction) {
   const slideInterval = setInterval(() => {
     let nextX = currentX + dx;
     let nextY = currentY + dy;
+
+    // Checa limites do mapa
+    if (nextX < 0 || nextX >= MAP_WIDTH || nextY < 0 || nextY >= MAP_HEIGHT) {
+      clearInterval(slideInterval);
+      bomb.isKicked = false;
+      bomb.slideTimer = null;
+      return;
+    }
 
     // Checa obstáculos
     const tileType = room.gameMap[nextY][nextX];
@@ -513,25 +537,27 @@ function handleExplosion(roomCode, bombId) {
         room.gameMap[y][x] = TILE_EMPTY;
         tilesToUpdate.push({ x, y, newType: TILE_EMPTY });
         
-        // ATUALIZADO: Lógica de drop ponderada
+        // Lógica de drop ponderada (ATUALIZADA com Super Bomba e raridade do Wall Pass)
         if (Math.random() < POWERUP_CHANCE) {
-          // --- NOVO: Sistema de Drop Ponderado ---
           const rand = Math.random();
-          let type = 'bomb-up';
-          if (rand < 0.30) { // 30%
+          let type = 'bomb-up'; // Default
+          
+          // Definição das faixas de probabilidade
+          if (rand < 0.25) {        // 25% Bomb Up
             type = 'bomb-up';
-          } else if (rand < 0.55) { // 25%
+          } else if (rand < 0.50) { // 25% Fire Up
             type = 'fire-up';
-          } else if (rand < 0.70) { // 15%
-            type = 'wall-pass'; 
-          } else if (rand < 0.85) { // 15%
+          } else if (rand < 0.65) { // 15% Kick Bomb
             type = 'kick-bomb';
-          } else if (rand < 0.95) { // 10%
-            type = 'skull'; 
-          } else { // 5%
-            type = 'bomb-pass'; 
+          } else if (rand < 0.75) { // 10% Super Bomb (NOVO)
+            type = 'super-bomb';
+          } else if (rand < 0.85) { // 10% Skull
+            type = 'skull';
+          } else if (rand < 0.93) { // 8% Wall Pass (Mais Raro)
+            type = 'wall-pass';
+          } else {                  // 7% Bomb Pass (Mais Raro)
+            type = 'bomb-pass';
           }
-          // --- Fim do Sistema Ponderado ---
 
           const powerUp = {
             id: uuidv4(),
@@ -576,13 +602,11 @@ function handleExplosion(roomCode, bombId) {
       const hit = explosionTiles.some(tile => tile.x === player.x && tile.y === player.y);
       if (hit) {
         player.isAlive = false;
-        // player.displayEmoji = '💀'; // REMOVIDO (Conforme solicitado)
         
         broadcast(room.code, { 
           type: 'player_update', 
           playerId: player.id, 
           isAlive: false
-          // displayEmoji: '💀' // REMOVIDO
         });
       }
     }
@@ -612,7 +636,9 @@ function isMoveValid(room, player, x, y) {
   const isBombAtPos = room.bombs.some(b => b.x === x && b.y === y);
   if (isBombAtPos) {
     if (player.canPassBombs) return true; // Pode passar
-    if (player.canKickBombs && !room.bombs.find(b => b.x === x && b.y === y).isKicked) return false; // Não pode passar, mas vai chutar (handlePlayerMove trata)
+    // Verifica se a bomba no local PODE ser chutada (não está deslizando)
+    const bombToKick = room.bombs.find(b => b.x === x && b.y === y);
+    if (player.canKickBombs && bombToKick && !bombToKick.isKicked) return false; // Não pode passar, mas vai chutar
     return (player.x === x && player.y === y); // Permite "sair" da bomba que acabou de colocar
   }
 
@@ -624,13 +650,16 @@ function checkPowerUpCollision(room, player) {
   
   if (powerUpIndex > -1) {
     const powerUp = room.powerUps[powerUpIndex];
+    let collectedPowerUpType = null; // Para saber se remove a maldição
     
     // Aplica o bônus (ATUALIZADO)
-    if (powerUp.type === 'bomb-up') player.maxBombs++;
-    if (powerUp.type === 'fire-up') player.bombPower++;
-    if (powerUp.type === 'bomb-pass') player.canPassBombs = true;
-    if (powerUp.type === 'wall-pass') player.canPassWalls = true;
-    if (powerUp.type === 'kick-bomb') player.canKickBombs = true;
+    if (powerUp.type === 'bomb-up') { player.maxBombs++; collectedPowerUpType = powerUp.type; }
+    if (powerUp.type === 'fire-up') { player.bombPower++; collectedPowerUpType = powerUp.type; }
+    if (powerUp.type === 'bomb-pass') { player.canPassBombs = true; collectedPowerUpType = powerUp.type; }
+    if (powerUp.type === 'wall-pass') { player.canPassWalls = true; collectedPowerUpType = powerUp.type; }
+    if (powerUp.type === 'kick-bomb') { player.canKickBombs = true; collectedPowerUpType = powerUp.type; }
+    if (powerUp.type === 'super-bomb') { player.hasSuperBomb = true; collectedPowerUpType = powerUp.type; } // (NOVO)
+    
     if (powerUp.type === 'skull') {
       // Remove maldição anterior, se houver
       player.curse = null;
@@ -641,17 +670,28 @@ function checkPowerUpCollision(room, player) {
         playerId: player.id,
         curse: player.curse
       });
+      collectedPowerUpType = null; // Pegar caveira não remove maldição
+    } else {
+       // (NOVO) Se pegou um power-up normal e estava amaldiçoado, remove a maldição
+       if (player.curse) {
+           player.curse = null;
+           broadcast(room.code, { type: 'player_cured', playerId: player.id });
+       }
     }
     
-    // Remove o power-up
+    // Remove o power-up do mapa
     room.powerUps.splice(powerUpIndex, 1);
     
-    // Avisa os clientes (exceto da caveira, que já foi avisada)
-    if (powerUp.type !== 'skull') {
+    // Avisa os clientes sobre o power-up coletado (exceto caveira)
+    if (collectedPowerUpType) {
       broadcast(room.code, {
         type: 'powerup_collected',
         powerUpId: powerUp.id,
-        playerId: player.id
+        playerId: player.id,
+        // Envia o estado atualizado para o placar
+        maxBombs: player.maxBombs,
+        bombPower: player.bombPower,
+        hasSuperBomb: player.hasSuperBomb 
       });
     }
   }
@@ -660,7 +700,7 @@ function checkPowerUpCollision(room, player) {
 
 function checkRoundOver(roomCode) {
   const room = rooms[roomCode];
-  // (NOVO) Não checa se a rodada já está terminando
+  // Não checa se a rodada já está terminando
   if (!room || !room.isGameRunning || room.isRoundEnding) return;
 
   const alivePlayers = Object.values(room.players).filter(p => p.isAlive);
@@ -688,7 +728,7 @@ function checkRoundOver(roomCode) {
 
   // Fim da Rodada: Se restar 1 ou 0 jogadores
   if (alivePlayers.length <= 1) {
-    // (NOVO) ATIVA A FLAG DE FIM DE RODADA
+    // ATIVA A FLAG DE FIM DE RODADA
     room.isRoundEnding = true;
     
     room.isGameRunning = false; // Pausa o jogo
@@ -710,9 +750,12 @@ function checkRoundOver(roomCode) {
       winnerName = winner.name;
     }
     
-    // --- (NOVO) DELAY PARA FIM DA RODADA ---
+    // --- DELAY PARA FIM DA RODADA ---
     // Agenda o anúncio do fim da rodada para daqui a X ms
     setTimeout(() => {
+        // Checa se a sala ainda existe (jogador pode ter desconectado durante o delay)
+        if (!rooms[roomCode]) return; 
+
         // Avisa do fim da rodada
         broadcast(room.code, {
           type: 'round_over',
@@ -736,7 +779,7 @@ function checkRoundOver(roomCode) {
           // Agenda o reinício da próxima rodada
           setTimeout(() => startNewRound(roomCode), 5000); // 5s após a msg de fim de rodada
         }
-    }, ROUND_END_DELAY_MS); // (NOVO) Espera 1.5s
+    }, ROUND_END_DELAY_MS); // Espera 1.5s
   }
 }
 
@@ -796,7 +839,7 @@ function startNewRound(roomCode) {
 
   room.isGameRunning = true;
   room.isSuddenDeath = false; // Garante que a morte súbita (bots) está desativada
-  room.isRoundEnding = false; // (NOVO) Reseta a flag
+  room.isRoundEnding = false; // Reseta a flag
   
   // Limpa timers antigos e inicia um novo
   if (room.roundTimer) clearTimeout(room.roundTimer);
@@ -851,9 +894,9 @@ function generateRoundState(roomCode) {
     player.activeBombs = 0;
     player.canPassBombs = false;
     player.canPassWalls = false;
-    player.canKickBombs = false; // NOVO
-    player.curse = null; // NOVO
-    // player.displayEmoji = player.chosenEmoji; // REMOVIDO
+    player.canKickBombs = false; 
+    player.hasSuperBomb = false; // (NOVO) Reseta Super Bomba
+    player.curse = null; 
     
     // Garante que a área de spawn esteja limpa
     const clearRadius = 1; // 1 quadrado ao redor
@@ -1008,7 +1051,7 @@ function runBotLogic(room, bot) {
     }
   }
   
-  // --- 4. PRIORIDADE 3: Caçar outros jogadores (NOVO) ---
+  // --- 4. PRIORIDADE 3: Caçar outros jogadores ---
   if (bot.activeBombs < bot.maxBombs && allSafeMoves.length > 0) {
     let placedBombForKill = false;
     const otherPlayers = Object.values(room.players).filter(p => p.isAlive && p.id !== bot.id);

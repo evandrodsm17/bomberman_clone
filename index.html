@@ -502,7 +502,7 @@
     const scoreboardEl = document.getElementById('scoreboard');
     const btnBackToLobby = document.getElementById('btn-back-to-lobby');
     
-    // Controles de Toque (NOVOS)
+    // Controles de Toque
     const toggleTouchControls = document.getElementById('toggle-touch-controls');
     const touchDpad = document.getElementById('touch-dpad');
     const touchActionButton = document.getElementById('touch-action-button');
@@ -511,31 +511,31 @@
     let ws;
     let localPlayerId = null;
     let localRoomCode = null;
-    let localHostId = null; // <-- Variável para salvar o Host ID
+    let localHostId = null; 
     let isGameActive = false;
     let textures = {};
     let texturesLoaded = false;
     let lastNotificationTimer = null;
-    let moveInterval = null; // <-- Para movimento contínuo
-    let showTouchControlsPreference = false; // <-- Salva a preferência
+    let moveInterval = null; 
+    let showTouchControlsPreference = false; 
     
     // Estado local do mundo do jogo
     let localGameState = {
       players: {},
       gameMap: [],
-      bombs: [],
+      bombs: [], // Agora inclui { id, x, y, isSuper }
       powerUps: [],
       explosions: []
     };
     
     // --- Carregamento de Texturas ---
     
-    // URLs das texturas (Substitua pelos seus links)
+    // URLs das texturas (REMOVIDO textures.bomb)
     const textureSources = {
       floor: 'https://placehold.co/40x40/8f8f8f/8f8f8f?text=.',
       solidWall: 'https://placehold.co/40x40/4a4a4a/4a4a4a?text=.',
       softWall: 'https://placehold.co/40x40/a0522d/a0522d?text=.',
-      bomb: 'https://placehold.co/40x40/111111/FFFFFF?text=B',
+      // bomb: '...', // Removido
       explosion: 'https://placehold.co/40x40/FFA500/FFA500?text=.'
     };
 
@@ -598,27 +598,25 @@
           case 'room_joined':
             localPlayerId = data.playerId;
             localRoomCode = data.roomCode;
-            localHostId = data.hostId; // <-- SALVA O HOST ID
+            localHostId = data.hostId; 
             updateLobby(data.roomCode, data.hostId, data.players);
             showScreen('lobby');
             break;
           
           case 'lobby_update':
             if (data.hostId) {
-              localHostId = data.hostId; // Atualiza o host se for enviado (ex: host antigo saiu)
+              localHostId = data.hostId; 
             }
-            // Usa o hostId local salvo para garantir que o painel não suma
             updateLobby(localRoomCode, localHostId, data.players);
             break;
             
           // --- Handlers de Início/Fim de Jogo ---
           case 'game_start':
-            // CORREÇÃO: Não sobrescrever o objeto, mas preenchê-lo
             localGameState.players = data.initialState.players;
             localGameState.gameMap = data.initialState.gameMap;
             localGameState.bombs = data.initialState.bombs || [];
             localGameState.powerUps = data.initialState.powerUps || [];
-            localGameState.explosions = []; // Limpa explosões
+            localGameState.explosions = []; 
             
             // ATUALIZADO: Mostra controles de toque com base na preferência
             if (showTouchControlsPreference) {
@@ -633,48 +631,47 @@
             isGameActive = true;
             btnBackToLobby.style.display = 'none';
             showScreen('game');
-            requestAnimationFrame(gameLoop); // Inicia o loop de renderização
+            requestAnimationFrame(gameLoop); 
             showGameNotification("O Jogo Começou!");
             break;
 
           case 'round_start':
-            // Reseta o estado local com os dados do servidor
             localGameState.gameMap = data.newState.gameMap;
             localGameState.players = data.newState.players;
             localGameState.bombs = [];
             localGameState.powerUps = [];
             localGameState.explosions = [];
             
-            updateScoreboard(); // Atualiza o placar (remove 'morto')
+            updateScoreboard(); 
             isGameActive = true;
             btnBackToLobby.style.display = 'none';
-            requestAnimationFrame(gameLoop); // Reinicia o loop
+            requestAnimationFrame(gameLoop); 
             showGameNotification("Nova Rodada!");
             break;
             
           case 'round_over':
-            isGameActive = false; // Pausa o jogo
+            isGameActive = false; 
             showGameNotification(`${data.winnerName} venceu a rodada!`);
             break;
 
           case 'game_over':
-            isGameActive = false; // Para o jogo
+            isGameActive = false; 
             showGameNotification(`FIM DE JOGO! ${data.winnerName} é o campeão!`);
-            btnBackToLobby.style.display = 'block'; // Mostra o botão de voltar
+            btnBackToLobby.style.display = 'block'; 
             break;
             
-          case 'sudden_death': // <-- NOVO EVENTO (Bots)
+          case 'sudden_death': // Bots
              showGameNotification("Morte Súbita! Apenas bots restaram!");
              break;
 
-          case 'sudden_death_starting': // <-- NOVO EVENTO (Humanos)
+          case 'sudden_death_starting': // Humanos
             showGameNotification("Morte Súbita! Blocos caindo!");
             break;
             
           case 'player_left':
             delete localGameState.players[data.playerId];
             if (data.newHostId) {
-              localHostId = data.newHostId; // Salva o novo host
+              localHostId = data.newHostId; 
               updateLobby(localRoomCode, data.newHostId, localGameState.players);
             }
             updateScoreboard();
@@ -688,7 +685,7 @@
             }
             break;
           
-          case 'bomb_moved': // <-- NOVO EVENTO (Chute)
+          case 'bomb_moved': // Chute
             const kickedBomb = localGameState.bombs.find(b => b.id === data.bombId);
             if (kickedBomb) {
                 kickedBomb.x = data.x;
@@ -697,17 +694,20 @@
             break;
             
           case 'bomb_placed':
-            localGameState.bombs.push(data.bomb);
+             // Armazena a informação isSuper
+             localGameState.bombs.push({
+                 id: data.bomb.id,
+                 x: data.bomb.x,
+                 y: data.bomb.y,
+                 isSuper: data.bomb.isSuper 
+             });
             break;
             
           case 'bomb_exploded':
-            // Remove a bomba
             localGameState.bombs = localGameState.bombs.filter(b => b.id !== data.bombId);
-            // Adiciona as explosões
             data.explosionTiles.forEach(tile => {
               const explosionId = `${tile.x}-${tile.y}-${Date.now()}`;
               localGameState.explosions.push({ ...tile, id: explosionId });
-              // Timer para remover a explosão da tela
               setTimeout(() => {
                 localGameState.explosions = localGameState.explosions.filter(e => e.id !== explosionId);
               }, 500);
@@ -725,52 +725,57 @@
             break;
             
           case 'powerup_collected':
-            // Remove o power-up
             const pUpIndex = localGameState.powerUps.findIndex(p => p.id === data.powerUpId);
             if (pUpIndex > -1) {
-              const powerUp = localGameState.powerUps[pUpIndex];
               const player = localGameState.players[data.playerId];
-              
-              // Atualiza o status local do jogador para o placar
               if (player) {
-                if (powerUp.type === 'bomb-up') player.maxBombs++;
-                if (powerUp.type === 'fire-up') player.bombPower++;
-                if (powerUp.type === 'bomb-pass') player.canPassBombs = true;
-                if (powerUp.type === 'wall-pass') player.canPassWalls = true;
-                if (powerUp.type === 'kick-bomb') player.canKickBombs = true;
-                // Caveira já foi tratada em 'player_cursed'
+                  // Atualiza o estado local com os dados enviados pelo servidor
+                  player.maxBombs = data.maxBombs;
+                  player.bombPower = data.bombPower;
+                  player.hasSuperBomb = data.hasSuperBomb;
+                  // Atualiza flags locais (que não vêm do server nesse evento)
+                  const pUpType = localGameState.powerUps[pUpIndex].type;
+                  if (pUpType === 'bomb-pass') player.canPassBombs = true;
+                  if (pUpType === 'wall-pass') player.canPassWalls = true;
+                  if (pUpType === 'kick-bomb') player.canKickBombs = true;
               }
-              
               localGameState.powerUps.splice(pUpIndex, 1);
-              updateScoreboard(); // Atualiza o placar
+              updateScoreboard(); 
             }
             break;
             
-          case 'player_cursed': // <-- NOVO EVENTO
+          case 'player_cursed': 
             if (localGameState.players[data.playerId]) {
                 localGameState.players[data.playerId].curse = data.curse;
-                // Poderia adicionar um feedback visual aqui (ex: mudar cor)
                 showGameNotification(`${localGameState.players[data.playerId].name} pegou uma caveira! (${data.curse})`);
             }
-            // Remove o power-up visualmente (se ainda existir)
             localGameState.powerUps = localGameState.powerUps.filter(p => p.x !== localGameState.players[data.playerId].x || p.y !== localGameState.players[data.playerId].y);
+            updateScoreboard(); // Mostra ícone de maldição
             break;
+
+          case 'player_cured': // NOVO
+              if (localGameState.players[data.playerId]) {
+                  localGameState.players[data.playerId].curse = null;
+                  showGameNotification(`${localGameState.players[data.playerId].name} foi curado!`);
+              }
+              updateScoreboard(); // Remove ícone de maldição
+              break;
             
-          case 'curse_transferred': // <-- NOVO EVENTO
+          case 'curse_transferred': 
             if (localGameState.players[data.fromId]) localGameState.players[data.fromId].curse = null;
             if (localGameState.players[data.toId]) localGameState.players[data.toId].curse = data.curse;
             showGameNotification(`Maldição passada para ${localGameState.players[data.toId].name}!`);
+            updateScoreboard(); // Atualiza ícones
             break;
 
-          case 'player_update': // <-- ATUALIZADO
+          case 'player_update': 
             if (localGameState.players[data.playerId]) {
               const player = localGameState.players[data.playerId];
-              // Atualiza apenas os campos que vieram na mensagem
               if (data.isAlive !== undefined) player.isAlive = data.isAlive;
-              // if (data.displayEmoji) player.displayEmoji = data.displayEmoji; // REMOVIDO
-              if (data.bombPower) player.bombPower = data.bombPower;
-              if (data.maxBombs) player.maxBombs = data.maxBombs;
-              updateScoreboard(); // Atualiza o placar
+              if (data.bombPower !== undefined) player.bombPower = data.bombPower;
+              if (data.maxBombs !== undefined) player.maxBombs = data.maxBombs;
+              if (data.hasSuperBomb !== undefined) player.hasSuperBomb = data.hasSuperBomb; // Recebe update da super bomba gasta
+              updateScoreboard(); 
             }
             break;
             
@@ -785,13 +790,12 @@
             
           // --- Outros ---
           case 'error_message':
-            alert(data.message); // TODO: Substituir por um modal
+            alert(data.message); 
             break;
         }
       };
 
       socket.onclose = () => {
-        // MUDANÇA: Verifica se a conexão foi estabelecida antes
         if (statusEl.textContent === 'Conectando...') {
            statusEl.textContent = 'Falha ao conectar. Verifique o servidor.';
         } else {
@@ -803,7 +807,6 @@
 
       socket.onerror = (err) => {
         console.error('Erro no WebSocket:', err);
-        // MUDANÇA: Mensagem de erro mais clara
         statusEl.textContent = 'Erro de conexão. O servidor (server.js) pode estar offline ou travado.';
       };
     }
@@ -812,7 +815,7 @@
 
     function gameLoop() {
       if (!isGameActive || !texturesLoaded) {
-        return; // Para o loop se o jogo pausar
+        return; 
       }
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -830,15 +833,15 @@
       for (let y = 0; y < localGameState.gameMap.length; y++) {
         for (let x = 0; x < localGameState.gameMap[y].length; x++) {
           const tileType = localGameState.gameMap[y][x];
-          if (tileType === 1 && textures.solidWall) { // Sólida
+          if (tileType === 1 && textures.solidWall) { 
             ctx.drawImage(textures.solidWall, x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
-          } else if (tileType === 2 && textures.softWall) { // Destrutível
+          } else if (tileType === 2 && textures.softWall) { 
             ctx.drawImage(textures.softWall, x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
           }
         }
       }
       
-      // 3. Desenha Power-ups (ATUALIZADO com novos emojis)
+      // 3. Desenha Power-ups (ATUALIZADO com Super Bomba)
       localGameState.powerUps.forEach(p => {
         ctx.font = `${GRID_SIZE * 0.6}px sans-serif`;
         ctx.textAlign = 'center';
@@ -846,19 +849,37 @@
         let emoji = '❓';
         if (p.type === 'bomb-up') emoji = '💣';
         if (p.type === 'fire-up') emoji = '🔥';
-        if (p.type === 'bomb-pass') emoji = '➡️'; // Passar por bombas
-        if (p.type === 'wall-pass') emoji = '👻'; // Passar por paredes
-        if (p.type === 'kick-bomb') emoji = '👟'; // Chutar bomba
-        if (p.type === 'skull') emoji = '💀';     // Caveira
+        if (p.type === 'bomb-pass') emoji = '➡️'; 
+        if (p.type === 'wall-pass') emoji = '👻'; 
+        if (p.type === 'kick-bomb') emoji = '👟'; 
+        if (p.type === 'skull') emoji = '💀';     
+        if (p.type === 'super-bomb') emoji = '💥'; // NOVO EMOJI
         ctx.fillText(emoji, (p.x * GRID_SIZE) + (GRID_SIZE / 2), (p.y * GRID_SIZE) + (GRID_SIZE / 2));
       });
 
-      // 4. Desenha Bombas
-      if (textures.bomb) {
-        localGameState.bombs.forEach(bomb => {
-          ctx.drawImage(textures.bomb, bomb.x * GRID_SIZE, bomb.y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
-        });
-      }
+      // 4. Desenha Bombas (ATUALIZADO para círculos)
+      localGameState.bombs.forEach(bomb => {
+        const x = bomb.x * GRID_SIZE;
+        const y = bomb.y * GRID_SIZE;
+        const halfGrid = GRID_SIZE / 2;
+        const radius = halfGrid * 0.8;
+
+        // Desenha o círculo
+        ctx.fillStyle = bomb.isSuper ? '#FF4136' : '#111111'; // Vermelho se super, preto se normal
+        ctx.beginPath();
+        ctx.arc(x + halfGrid, y + halfGrid, radius, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.strokeStyle = '#FFFFFF'; // Contorno branco
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Desenha a letra
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = `bold ${GRID_SIZE * 0.5}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(bomb.isSuper ? 'S' : 'B', x + halfGrid, y + halfGrid * 1.05); // Ajuste fino vertical
+      });
       
       // 5. Desenha Explosões
       if (textures.explosion) {
@@ -867,31 +888,29 @@
         });
       }
 
-      // 6. Desenha Jogadores (ATUALIZADO: Não desenha se morto)
+      // 6. Desenha Jogadores
       Object.values(localGameState.players).forEach(player => {
-        if (player.isAlive) { // Só desenha se estiver vivo
+        if (player.isAlive) { 
           const x = player.x * GRID_SIZE;
           const y = player.y * GRID_SIZE;
           const halfGrid = GRID_SIZE / 2;
           
           // Desenha o círculo da cor do jogador
           ctx.fillStyle = player.color;
-          // Efeito visual para maldição
           if (player.curse) {
              ctx.globalAlpha = 0.6 + Math.sin(Date.now() / 100) * 0.3; // Pulsando
           }
           ctx.beginPath();
           ctx.arc(x + halfGrid, y + halfGrid, halfGrid * 0.9, 0, 2 * Math.PI);
           ctx.fill();
-          ctx.globalAlpha = 1.0; // Reseta alpha
+          ctx.globalAlpha = 1.0; 
           
           // Desenha o emoji do jogador
           ctx.font = `${GRID_SIZE * 0.7}px sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(player.emoji, x + halfGrid, y + (halfGrid * 1.1)); // Ajuste fino vertical
+          ctx.fillText(player.emoji, x + halfGrid, y + (halfGrid * 1.1)); 
         }
-        // Se morto, não desenha nada
       });
 
       requestAnimationFrame(gameLoop);
@@ -913,7 +932,6 @@
         const item = document.createElement('div');
         item.className = 'player-lobby-item';
         
-        // Estiliza a cor
         const colorBox = `<span style="border-left: 6px solid ${p.color}; padding-left: 8px; font-size: 1.5rem;">${p.emoji}</span>`;
         
         let hostTag = (p.id === hostId) ? ' (Host) 👑' : '';
@@ -921,20 +939,16 @@
         listEl.appendChild(item);
       });
       
-      // Mostra o painel do host
       document.getElementById('host-panel').style.display = (localPlayerId === hostId) ? 'block' : 'none';
-      
-      // Habilita/Desabilita botões
       document.getElementById('btn-add-bot').disabled = Object.keys(players).length >= 5;
       document.getElementById('btn-start-game').disabled = Object.keys(players).length < 2;
     }
 
     function updateScoreboard() {
-      if (!localGameState || !localGameState.players) return; // Checagem de segurança
+      if (!localGameState || !localGameState.players) return; 
       
-      scoreboardEl.innerHTML = ''; // Limpa o placar
+      scoreboardEl.innerHTML = ''; 
       
-      // Ordena por score
       const sortedPlayers = Object.values(localGameState.players).sort((a, b) => b.score - a.score);
       
       sortedPlayers.forEach(p => {
@@ -946,16 +960,18 @@
           item.classList.add('dead');
         }
         
-        // ATUALIZADO: Mostra ícone de maldição se houver
         let curseIcon = '';
         if (p.curse === 'reverse') curseIcon = '🔄';
         if (p.curse === 'slow') curseIcon = '🐢';
+        
+        // NOVO: Indicador de Super Bomba
+        let superBombIcon = p.hasSuperBomb ? '💥' : '';
         
         item.innerHTML = `
           <div class="player-score">${p.emoji} ${p.score}</div>
           <div class="player-name">${p.name} ${curseIcon}</div>
           <div class="player-stats">
-            💣 ${p.maxBombs} &nbsp;&nbsp; 🔥 ${p.bombPower}
+            💣 ${p.maxBombs} &nbsp;&nbsp; 🔥 ${p.bombPower} ${superBombIcon}
           </div>
         `;
         scoreboardEl.appendChild(item);
@@ -963,21 +979,16 @@
     }
 
     function showGameNotification(message) {
-      // Limpa timer anterior se houver
       if (lastNotificationTimer) {
         clearTimeout(lastNotificationTimer);
       }
       
       notificationEl.textContent = message;
       notificationEl.style.display = 'block';
-      notificationEl.style.animation = 'none'; // Reseta a animação
-      
-      // Força o navegador a refazer a animação
+      notificationEl.style.animation = 'none'; 
       void notificationEl.offsetWidth; 
-      
       notificationEl.style.animation = 'fadeInOut 3s ease-in-out forwards';
       
-      // Define um timer para esconder o elemento (caso a animação falhe)
       lastNotificationTimer = setTimeout(() => {
         notificationEl.style.display = 'none';
       }, 3000);
@@ -989,26 +1000,11 @@
       if (!isGameActive) return;
 
       switch (e.key) {
-        case 'ArrowUp':
-        case 'w':
-          sendMove('up');
-          break;
-        case 'ArrowDown':
-        case 's':
-          sendMove('down');
-          break;
-        case 'ArrowLeft':
-        case 'a':
-          sendMove('left');
-          break;
-        case 'ArrowRight':
-        case 'd':
-          sendMove('right');
-          break;
-        case ' ': // Barra de espaço
-          e.preventDefault(); // Impede a página de rolar
-          placeBomb();
-          break;
+        case 'ArrowUp': case 'w': sendMove('up'); break;
+        case 'ArrowDown': case 's': sendMove('down'); break;
+        case 'ArrowLeft': case 'a': sendMove('left'); break;
+        case 'ArrowRight': case 'd': sendMove('right'); break;
+        case ' ': e.preventDefault(); placeBomb(); break;
       }
     });
 
@@ -1016,18 +1012,15 @@
 
     // Tela Home
     document.getElementById('btn-create-room').onclick = () => {
-      // ATUALIZADO: Salva a preferência dos controles de toque
       showTouchControlsPreference = toggleTouchControls.checked;
       ws.send(JSON.stringify({
         type: 'create_room',
         name: document.getElementById('player-name').value,
-        // Cor removida, será automática
         emoji: document.getElementById('player-emoji').value
       }));
     };
     
     document.getElementById('btn-join-room').onclick = () => {
-      // ATUALIZADO: Salva a preferência dos controles de toque
       showTouchControlsPreference = toggleTouchControls.checked;
       const code = document.getElementById('room-code').value.toUpperCase();
       if (code.length === 4) {
@@ -1035,7 +1028,6 @@
           type: 'join_room',
           roomCode: code,
           name: document.getElementById('player-name').value,
-          // Cor removida, será automática
           emoji: document.getElementById('player-emoji').value
         }));
       } else {
@@ -1049,7 +1041,6 @@
 
     // Tela Jogo
     btnBackToLobby.onclick = () => {
-      // Apenas recarrega a página. O onclose do websocket vai cuidar da desconexão.
       window.location.reload();
     };
     
@@ -1065,31 +1056,24 @@
       ws.send(JSON.stringify({ type: 'place_bomb' }));
     }
     
-    // --- Handlers de Input (Controles de Toque - ATUALIZADOS) ---
-    
-    // REMOVIDO listener do change, a lógica agora é na inicialização e game_start
-    /* toggleTouchControls.addEventListener('change', (e) => { ... }); */
-    
-    // Lógica de Movimento Contínuo
+    // --- Handlers de Input (Controles de Toque) ---
+        
     function handleMovePress(direction) {
-      if (moveInterval) clearInterval(moveInterval); // Limpa o movimento anterior
-      sendMove(direction); // Envia o primeiro movimento imediatamente
+      if (moveInterval) clearInterval(moveInterval); 
+      sendMove(direction); 
       moveInterval = setInterval(() => {
-        sendMove(direction); // Continua enviando a cada 150ms
+        sendMove(direction); 
       }, 150);
     }
     
     function handleMoveRelease() {
-      if (moveInterval) clearInterval(moveInterval); // Para o movimento
+      if (moveInterval) clearInterval(moveInterval); 
       moveInterval = null;
     }
     
-    // Mapeia os botões de D-Pad
     const dpadButtons = [
-      { id: 'touch-up', dir: 'up' },
-      { id: 'touch-down', dir: 'down' },
-      { id: 'touch-left', dir: 'left' },
-      { id: 'touch-right', dir: 'right' }
+      { id: 'touch-up', dir: 'up' }, { id: 'touch-down', dir: 'down' },
+      { id: 'touch-left', dir: 'left' }, { id: 'touch-right', dir: 'right' }
     ];
     
     dpadButtons.forEach(btn => {
@@ -1098,11 +1082,9 @@
       element.addEventListener('touchstart', (e) => { e.preventDefault(); handleMovePress(btn.dir); }, { passive: false });
     });
 
-    // Listeners para "soltar" o botão (funcionam na tela inteira)
     window.addEventListener('mouseup', handleMoveRelease);
     window.addEventListener('touchend', handleMoveRelease);
 
-    // Botão de Bomba (ação única)
     const bombButton = document.getElementById('touch-bomb');
     bombButton.addEventListener('mousedown', (e) => { e.preventDefault(); placeBomb(); });
     bombButton.addEventListener('touchstart', (e) => { e.preventDefault(); placeBomb(); }, { passive: false });
@@ -1110,21 +1092,17 @@
 
     // --- Inicialização ---
     function initializeApp() {
-      // Detecta se é um dispositivo de toque (provavelmente mobile)
       const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-      
       if (isMobile) {
         toggleTouchControls.checked = true;
       }
-      // Salva o estado inicial (seja default ou mobile)
       showTouchControlsPreference = toggleTouchControls.checked; 
       
-      // Listener para salvar a preferência se o usuário mudar ANTES de entrar
       toggleTouchControls.addEventListener('change', (e) => {
          showTouchControlsPreference = e.target.checked;
       });
       
-      preloadTextures(); // Inicia o carregamento das texturas
+      preloadTextures(); 
     }
     
     initializeApp();
